@@ -1,0 +1,116 @@
+[gd_scene load_steps=9 format=3 uid="uid://dm2oqp2bkh1jt"]
+
+[ext_resource type="Script" path="res://scenes/title/title.gd" id="1_title"]
+[ext_resource type="Theme" path="res://assets/ui/casual_theme.tres" id="2_theme"]
+[ext_resource type="VideoStream" path="res://assets/video/bg_loop.ogv" id="3_video"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.12, 0.32, 0.58, 0.85)
+corner_radius_top_left = 24
+corner_radius_top_right = 24
+corner_radius_bottom_right = 24
+corner_radius_bottom_left = 24
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.4, 0.7, 1.0, 0.8)
+shadow_color = Color(0, 0, 0, 0.4)
+shadow_size = 8
+shadow_offset = Vector2(0, 4)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_title_bg"]
+bg_color = Color(0.08, 0.22, 0.45, 0.9)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.5, 0.8, 1.0, 0.6)
+
+[sub_resource type="Gradient" id="Gradient_bg"]
+colors = PackedColorArray(0.13, 0.38, 0.68, 1, 0.06, 0.18, 0.38, 1)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_bg"]
+gradient = SubResource("Gradient_bg")
+fill = 1
+fill_from = Vector2(0.5, 0)
+fill_to = Vector2(0.5, 1)
+
+[node name="Title" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_title")
+
+[node name="BgVideo" type="VideoStreamPlayer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stream = ExtResource("3_video")
+autoplay = true
+loop = true
+expand = true
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="PanelContainer" type="PanelContainer" parent="CenterContainer"]
+custom_minimum_size = Vector2(800, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/PanelContainer"]
+layout_mode = 2
+theme_override_constants/separation = 48
+size_flags_horizontal = 3
+
+[node name="TitleBg" type="PanelContainer" parent="CenterContainer/PanelContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_title_bg")
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/TitleBg"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 80
+theme_override_colors/font_color = Color(0.9, 0.95, 1.0, 1)
+theme_override_colors/font_outline_color = Color(0.1, 0.3, 0.6, 1)
+theme_override_constants/outline_size = 4
+text = "Mobile RPG"
+horizontal_alignment = 1
+
+[node name="StatusLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+theme_override_colors/font_color = Color(0.8, 0.9, 1.0, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 2
+text = "ロード中..."
+horizontal_alignment = 1
+
+[node name="Spacer" type="Control" parent="CenterContainer/PanelContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+
+[node name="ApiTestButton" type="Button" parent="CenterContainer/PanelContainer/VBoxContainer"]
+custom_minimum_size = Vector2(600, 110)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 38
+text = "APIテスト"
+
+[connection signal="pressed" from="CenterContainer/PanelContainer/VBoxContainer/ApiTestButton" to="." method="_on_api_test_button_pressed"]

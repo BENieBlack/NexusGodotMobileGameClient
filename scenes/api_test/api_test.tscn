@@ -1,0 +1,194 @@
+[gd_scene load_steps=2 format=3 uid="uid://c5h7xqf8jvb6t"]
+
+[ext_resource type="Script" path="res://scenes/api_test/api_test.gd" id="1_api_test"]
+
+[node name="ApiTest" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_api_test")
+
+[node name="ColorRect" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.1, 0.1, 0.15, 1)
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 60
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 60
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="BackButton" type="Button" parent="MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "← タイトルに戻る"
+
+[node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "APIテスト画面"
+horizontal_alignment = 1
+
+[node name="StatusLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "準備完了"
+horizontal_alignment = 1
+
+[node name="HSeparator1" type="HSeparator" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ButtonsGrid" type="GridContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+columns = 2
+theme_override_constants/h_separation = 10
+theme_override_constants/v_separation = 10
+
+[node name="ResetDeviceButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonsGrid"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 0.5, 0.2, 1)
+theme_override_font_sizes/font_size = 24
+text = "デバイスIDリセット"
+
+[node name="GetPlayerButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonsGrid"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "プレイヤー情報"
+
+[node name="LoginButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonsGrid"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "ログイン"
+
+[node name="VersionCheckButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonsGrid"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "バージョンチェック"
+
+[node name="GachaButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonsGrid"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "ガチャ実行"
+
+[node name="EquipmentLevelupButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonsGrid"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "装備レベルアップ"
+
+[node name="UnitLevelupButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonsGrid"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "ユニットレベルアップ"
+
+[node name="FriendListButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonsGrid"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "フレンドリスト"
+
+[node name="FriendApplyListButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonsGrid"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "フレンド申請リスト"
+
+[node name="MailboxListButton" type="Button" parent="MarginContainer/VBoxContainer/ButtonsGrid"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "メールボックス"
+
+[node name="HSeparator2" type="HSeparator" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ResponseLabel" type="Label" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "レスポンス:"
+
+[node name="ScrollContainer" type="ScrollContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ResponseText" type="TextEdit" parent="MarginContainer/VBoxContainer/ScrollContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_colors/background_color = Color(0.05, 0.05, 0.1, 1)
+theme_override_font_sizes/font_size = 24
+editable = false
+wrap_mode = 1
+
+[node name="HSeparator3" type="HSeparator" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="BottomButtons" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="ClearButton" type="Button" parent="MarginContainer/VBoxContainer/BottomButtons"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 28
+text = "クリア"
+
+[node name="Spacer" type="Control" parent="MarginContainer/VBoxContainer/BottomButtons"]
+custom_minimum_size = Vector2(40, 0)
+layout_mode = 2
+
+[node name="BackButton" type="Button" parent="MarginContainer/VBoxContainer/BottomButtons"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 28
+text = "戻る"
+
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ButtonsGrid/ResetDeviceButton" to="." method="_on_reset_device_button_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ButtonsGrid/GetPlayerButton" to="." method="_on_get_player_button_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ButtonsGrid/LoginButton" to="." method="_on_login_button_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ButtonsGrid/VersionCheckButton" to="." method="_on_version_check_button_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ButtonsGrid/GachaButton" to="." method="_on_gacha_button_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ButtonsGrid/EquipmentLevelupButton" to="." method="_on_equipment_levelup_button_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ButtonsGrid/UnitLevelupButton" to="." method="_on_unit_levelup_button_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ButtonsGrid/FriendListButton" to="." method="_on_friend_list_button_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ButtonsGrid/FriendApplyListButton" to="." method="_on_friend_apply_list_button_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/ButtonsGrid/MailboxListButton" to="." method="_on_mailbox_list_button_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/BottomButtons/ClearButton" to="." method="_on_clear_button_pressed"]
+[connection signal="pressed" from="MarginContainer/VBoxContainer/BottomButtons/BackButton" to="." method="_on_back_button_pressed"]
