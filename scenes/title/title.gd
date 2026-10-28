@@ -81,7 +81,7 @@ func _on_login_completed(response_data: Dictionary) -> void:
 
 	status_label.text = "ログイン成功!"
 	await get_tree().create_timer(0.5).timeout
-	SceneManager.goto_login_bonus()
+	SceneManager.goto_agreement()
 
 # ログインAPI失敗時
 func _on_login_failed(error: String) -> void:
