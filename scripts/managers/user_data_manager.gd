@@ -8,6 +8,8 @@ var is_logged_in: bool = false
 var auth_token: String = ""
 var refresh_token: String = ""
 var user_id: String = ""
+# 所属ギルドID（0 = 未加入）
+var guild_id: int = 0
 var master_deploy_id: int = 0
 var master_hash: String = ""
 var user_data: Dictionary = {}
@@ -29,6 +31,7 @@ func save_user_data() -> void:
 		"auth_token": auth_token,
 		"refresh_token": refresh_token,
 		"user_id": user_id,
+		"guild_id": guild_id,
 		"master_deploy_id": master_deploy_id,
 		"master_hash": master_hash,
 		"user_data": user_data
@@ -58,6 +61,7 @@ func load_user_data() -> void:
 		auth_token = save_dict.get("auth_token", "")
 		refresh_token = save_dict.get("refresh_token", "")
 		user_id = save_dict.get("user_id", "")
+		guild_id = int(save_dict.get("guild_id", 0))
 		master_deploy_id = int(save_dict.get("master_deploy_id", 0))
 		master_hash = str(save_dict.get("master_hash", ""))
 		user_data = save_dict.get("user_data", {})
@@ -125,6 +129,7 @@ func logout() -> void:
 	auth_token = ""
 	refresh_token = ""
 	user_id = ""
+	guild_id = 0
 	master_deploy_id = 0
 	master_hash = ""
 	user_data = {}

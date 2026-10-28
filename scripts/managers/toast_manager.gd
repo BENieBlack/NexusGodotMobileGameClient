@@ -33,6 +33,10 @@ const NOTIFICATION_ICONS = {
 	"login_bonus_ready":    "🎊",
 	"system_announcement":  "📢",
 	"maintenance_notice":   "🔧",
+	# ギルド全員向け通知アイコン
+	"guild_member_joined":  "🏰",
+	"guild_member_left":    "👋",
+	"guild_level_up":       "⬆️",
 }
 const DEFAULT_ICON = "🔔"
 
@@ -125,6 +129,50 @@ func show_toast(title: String, body: String, type: String = "") -> void:
 	if not _is_showing_toast:
 		_show_next_toast()
 
+## ギルドに加入したときに呼び出す（presence-guild.{guild_id} を購読する）
+func subscribe_guild(guild_id: int) -> void:
+	if _socket_id == "" or UserDataManager.auth_token == "":
+		print("[ToastManager] socket_id またはトークンが未設定のため guild チャンネル購読できません")
+		return
+
+	var channel_name = "presence-guild." + str(guild_id)
+	print("[ToastManager] ギルドチャンネル認証リクエスト送信: ", channel_name)
+
+	# presence チャンネルも認証が必要なため HTTPRequest で auth を取得する
+	var auth_http = HTTPRequest.new()
+	add_child(auth_http)
+	auth_http.request_completed.connect(func(result, code, _headers, body):
+		_on_guild_auth_completed(result, code, body, channel_name, auth_http)
+	)
+
+	var url = "http://localhost:8080/broadcasting/auth"
+	var headers = PackedStringArray([
+		"Content-Type: application/json",
+		"Accept: application/json",
+		"Authorization: Bearer " + UserDataManager.auth_token
+	])
+	var body = JSON.stringify({
+		"socket_id": _socket_id,
+		"channel_name": channel_name
+	})
+	auth_http.request(url, headers, HTTPClient.METHOD_POST, body)
+
+## ギルドから脱退したときに呼び出す（presence-guild.{guild_id} の購読を解除する）
+func unsubscribe_guild(guild_id: int) -> void:
+	if _ws == null or _ws.get_ready_state() != WebSocketPeer.STATE_OPEN:
+		print("[ToastManager] WebSocket 未接続のためギルドチャンネル購読解除できません")
+		return
+
+	var channel_name = "presence-guild." + str(guild_id)
+	var msg = JSON.stringify({
+		"event": "pusher:unsubscribe",
+		"data": {
+			"channel": channel_name
+		}
+	})
+	_ws.send_text(msg)
+	print("[ToastManager] ギルドチャンネル購読解除: ", channel_name)
+
 # ============================================================
 # WebSocket 接続処理
 # ============================================================
@@ -173,11 +221,13 @@ func _handle_message(raw: String) -> void:
 		"pusher:connection_established":
 			_on_connection_established(msg)
 		"pusher_internal:subscription_succeeded":
-			_on_subscription_succeeded()
+			_on_subscription_succeeded(msg)
 		"pusher:ping":
 			_send_pong()
 		"notification.created":
 			_on_notification_created(msg)
+		"guild.notification":
+			_handle_guild_notification(msg)
 		_:
 			print("[ToastManager] 未処理のイベント: ", event)
 
@@ -262,9 +312,17 @@ func _subscribe_channel(channel_name: String, auth_str: String) -> void:
 	})
 	_ws.send_text(msg)
 
-func _on_subscription_succeeded() -> void:
+func _on_subscription_succeeded(msg: Dictionary) -> void:
 	_is_subscribed = true
-	print("[ToastManager] チャンネル購読成功")
+	var channel = msg.get("channel", "")
+	print("[ToastManager] チャンネル購読成功: ", channel)
+
+	# プライベート通知チャンネルの購読成功後、ギルドに加入中であれば自動購読する
+	if channel.begins_with("private-notification."):
+		var gid = UserDataManager.guild_id
+		if gid > 0:
+			print("[ToastManager] ギルドチャンネルを自動購読します: guild_id=", gid)
+			subscribe_guild(gid)
 
 func _send_pong() -> void:
 	_ping_timer = 0.0  # タイムアウトタイマーをリセット
@@ -288,6 +346,46 @@ func _on_notification_created(msg: Dictionary) -> void:
 	var type = data.get("type", "")
 
 	print("[ToastManager] 通知受信: [%s] %s - %s" % [type, title, body])
+	show_toast(title, body, type)
+
+# ギルドチャンネル認証完了時の処理
+func _on_guild_auth_completed(result: int, code: int, body: PackedByteArray, channel_name: String, auth_http: HTTPRequest) -> void:
+	auth_http.queue_free()
+
+	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
+		print("[ToastManager] ギルドチャンネル認証失敗: result=", result, " code=", code)
+		return
+
+	var res = JSON.parse_string(body.get_string_from_utf8())
+	if res == null:
+		print("[ToastManager] ギルドチャンネル認証レスポンスのパース失敗")
+		return
+
+	var auth_str = res.get("auth", "")
+	if auth_str == "":
+		print("[ToastManager] ギルドチャンネル認証: auth が空です")
+		return
+
+	print("[ToastManager] ギルドチャンネル認証成功。subscribe 送信: ", channel_name)
+	_subscribe_channel(channel_name, auth_str)
+
+# guild.notification イベントを受信したときの処理
+func _handle_guild_notification(msg: Dictionary) -> void:
+	# data フィールドは JSON 文字列の場合があるので二重デコード
+	var data_raw = msg.get("data", "")
+	var data: Dictionary = {}
+	if typeof(data_raw) == TYPE_STRING:
+		var parsed = JSON.parse_string(data_raw)
+		if parsed != null:
+			data = parsed
+	elif typeof(data_raw) == TYPE_DICTIONARY:
+		data = data_raw
+
+	var title = data.get("title", "ギルド通知")
+	var body = data.get("body", "")
+	var type = data.get("type", "")
+
+	print("[ToastManager] ギルド通知受信: [%s] %s - %s" % [type, title, body])
 	show_toast(title, body, type)
 
 # ============================================================
