@@ -21,6 +21,7 @@ UserDataManager="*res://scripts/managers/user_data_manager.gd"
 SceneManager="*res://scripts/managers/scene_manager.gd"
 AuthService="*res://scripts/services/auth_service.gd"
 MasterDataManager="*res://scripts/managers/master_data_manager.gd"
+ToastManager="*res://scripts/managers/toast_manager.gd"
 
 [display]
 

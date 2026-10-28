@@ -79,6 +79,9 @@ func _on_login_completed(response_data: Dictionary) -> void:
 
 	UserDataManager.set_login_data(sys_player, trx_unit_list, trx_item_list, trx_wallet_list, login_bonus_list)
 
+	# Reverb WebSocket に接続してリアルタイム通知を開始
+	ToastManager.connect_to_reverb()
+
 	status_label.text = "ログイン成功!"
 	await get_tree().create_timer(0.5).timeout
 	SceneManager.goto_agreement()
