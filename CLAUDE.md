@@ -16,9 +16,10 @@
 
 | 内容 | 場所 |
 | --- | --- |
-| 構成・レイヤー（scenes / scripts の分担） | [.claude/architecture.md](.claude/architecture.md) |
+| 構成・レイヤー（クリーンアーキテクチャ 3 層・コンテキストと共有モジュール master_data・依存ルール・命名・移行方針） | [.claude/architecture.md](.claude/architecture.md) |
 | GDScript の規約 | [.claude/coding-standards.md](.claude/coding-standards.md) |
 | サーバー API との通信仕様 | [.claude/api.md](.claude/api.md) |
+| 画面ごとの設計（クライアント側） | `docs/design/<機能>/client_design.md`（例: [title-to-home](docs/design/title-to-home/client_design.md)） |
 | 実装履歴 | [.claude/implementation-history.md](.claude/implementation-history.md) |
 | マスターデータ・アセット | [docs/MASTER_DATA.md](docs/MASTER_DATA.md) / [docs/ASSETS.md](docs/ASSETS.md) |
 

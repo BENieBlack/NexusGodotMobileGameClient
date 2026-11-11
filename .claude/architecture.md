@@ -1,40 +1,268 @@
 # アーキテクチャ設計
 
-## レイヤー構成
+新しい画面・コンテキスト・API 呼び出しを追加するとき、コンテキストをまたぐ依存を書くとき、既存ファイルを新構成へ移すときに読む。
+GDScript の書き方は [coding-standards.md](./coding-standards.md)、サーバー API の通信仕様は [api.md](./api.md)。
+
+クライアントは、サーバー（`NexusLaravelMobileGameServer`）と同じく**クリーンアーキテクチャと DDD（軽量版）**で作る。層は、モバイルの一般的な Clean Architecture に合わせた **presentation / domain / data の 3 層**。サーバーの規約（[サーバーの CLAUDE.md](../../NexusLaravelMobileGameServer/CLAUDE.md)、同 `.claude/architecture.md`）と考え方を揃える。
+
+- UseCase は 1 操作 1 つ。結果の型は UseCase ごとに持つ（共用しない）
+- 他コンテキストは、相手の公開する契約（domain の公開 UseCase）か共有の EventBus だけを使う。相手の内部を直接参照しない
+- 起きたことを伝えるだけなら EventBus（サーバーの Dispatcher に相当）
+- 層の呼び名はサーバーに揃えない（サーバーは Laravel の Controller / UseCase / Service / Repository、クライアントは 3 層）。揃えるのは**コンテキスト名**と考え方
+- `core/` と `contexts/` は `app/` を参照しない（サーバーの「packages は App を参照しない」に相当）。ただし presentation だけは、オートロード名（`AppContext` / `SceneRouter` / `Toast` / `EventBus`）の参照を許す（2 節）
+
+## 1. 階層
 
 ```
-┌─────────────────────────────────────┐
-│  Presentation Layer (scenes/)       │ ← UI・シーン遷移
-├─────────────────────────────────────┤
-│  Application Layer (managers/)      │ ← グローバル状態管理
-├─────────────────────────────────────┤
-│  Service Layer (services/)          │ ← API通信・認証
-├─────────────────────────────────────┤
-│  Data Layer (models/, repositories/)│ ← データモデル・取得
-└─────────────────────────────────────┘
+res://
+├── app/                          # 合成ルート（起動・DI・オートロード）
+│   ├── app_context.gd            # 依存の組み立て（Repository 実装を UseCase に渡す）
+│   └── scene_router.gd           # 画面遷移（旧 SceneManager）
+├── core/                         # ゲーム非依存の基盤（HTTP・設定・Result 等。どこからも使える）
+│   ├── domain/                   # result.gd, app_error.gd, event_bus.gd, json_reader.gd 等
+│   ├── data/                     # http/（ApiClient・ApiResult）, config/（ApiConfig）, storage/
+│   └── presentation/             # toast, loading, エラーダイアログ等の共通 UI
+├── master_data/                  # 読み取り専用の参照データ。コンテキストに属さない共有モジュール
+│   ├── domain/                   #   mst の読み取りモデル、Repository の契約、同期 UseCase（バージョン確認・更新判定）
+│   └── data/                     #   SQLite 接続、差分ダウンロード、ハッシュ管理、mst Repository の実装、version API 呼び出し
+├── contexts/                     # サーバーの Domain/{Context} と同じ名前（master_data は含めない）
+│   ├── auth/                     # sign_up / sign_in / refresh、トークンの保存、タイトル画面
+│   │   ├── presentation/         #   title/（*.tscn と *_presenter.gd）
+│   │   ├── domain/               #   entities/, use_cases/, repositories/（契約の基底クラス）
+│   │   └── data/                 #   api/（呼び出しと応答の型）, local/（保存）, repositories/（契約の実装）
+│   ├── agreement/                # 規約の取得・同意、規約画面
+│   ├── login/                    # POST /auth/login、ログインボーナス画面
+│   ├── player/                   # プレイヤーと所持データの読み取りモデル、ホーム画面
+│   └── （今後: gacha / unit / equipment …）
+├── tests/                        # contexts/・master_data/・core/ をミラー（unit / integration / e2e）
+├── assets/  addons/  data/  docs/
 ```
 
-## オートロード（グローバルシングルトン）
+各コンテキストの 3 層（presentation / domain / data）は、中身が無い層は作らない。
 
-| 名前 | スクリプト | 役割 |
-|------|-----------|------|
-| `UserDataManager` | `scripts/managers/user_data_manager.gd` | 認証トークン・プレイヤーデータ・ゲームデータ |
-| `SceneManager` | `scripts/managers/scene_manager.gd` | シーン遷移 |
-| `MasterDataManager` | `scripts/managers/master_data_manager.gd` | マスターデータ（SQLite） |
+## 2. 依存ルール
 
-## 依存関係ルール
+```
+presentation ──▶ domain ◀── data（domain の契約を実装する）
+```
 
-- `scenes/` → `managers/`, `services/` への参照はOK
-- `managers/` → `services/` への参照はOK
-- `services/` → `managers/` への参照はOK（`UserDataManager`のトークン参照）
-- `models/` → 他への依存なし
-- `repositories/` → `models/` のみ参照
+| ルール | 内容 |
+| --- | --- |
+| 向き | presentation → domain ← data（data が domain の契約を実装）。**presentation は data を直接参照しない**。domain は presentation・data を参照しない |
+| domain | `Node` / `HTTPRequest` / `FileAccess` / シーンに依存しない。`RefCounted` だけで書く。単体テストをエンジン起動なしの軽さで書けること |
+| presenter | シーンのスクリプトは API・保存を直接呼ばず、UseCase だけを呼ぶ。UseCase の結果を表示に変える |
+| UseCase | 1 操作 1 つ。専用の結果型を返す。Repository は契約（domain）を通して使う |
+| master_data | 下の 2-1 を参照。`contexts/*` → `master_data/domain` は読み取りのみ許可 |
+| 他コンテキスト | 相手の domain の公開 UseCase、または core の EventBus だけを使う。相手の entities・契約・data は参照しない |
+| core | contexts と app を参照しない（`core/presentation` はオートロード名の参照のみ可）。契約（core/domain）を定義し、contexts が実装して AppContext が結ぶ |
+| contexts | `res://app/` のパス参照（`preload` / `load`）をしない。**presentation だけは**、オートロード名 `AppContext`（UseCase の受け取り）・`SceneRouter`（遷移）・`Toast` / `EventBus` の参照を許す。**domain / data は app を参照しない**。UseCase の組み立ては AppContext だけが行う |
+| API 応答 | `data/api` で型付きオブジェクト（`*_response.gd`）に変換する（腐敗防止層）。null と欠落を同じに扱う規則（D3）はここに閉じ込める。domain に生の Dictionary を渡さない。応答の型・ローカル保存の実装は data に閉じ、domain には契約（基底クラス）だけがある |
+| オートロード | 最小に保つ: `AppContext` / `SceneRouter` / `EventBus` / `Toast`。状態はオートロードに置かず、コンテキストの Repository が持つ。**`AppContext._ready` では他のオートロードを呼ばない**（`EventBus` の購読登録のみ。通信・遷移・Toast は呼ばない）。デバッグ専用のオートロードは debug 用の置き場にする（9 節） |
 
-## シーン構成
+### 2-1. master_data の位置づけ
 
-| シーン | パス | 説明 |
-|--------|------|------|
-| タイトル | `scenes/title/title.tscn` | 認証 → ログイン → ログインボーナスへ |
-| ログインボーナス | `scenes/login_bonus/login_bonus.tscn` | ログインボーナス表示 |
-| ホーム | `scenes/home/home.tscn` | メインメニュー |
-| APIテスト | `scenes/api_test/api_test.tscn` | デバッグ用 |
+`master_data/` は `contexts/` と同階層の**共有モジュール**で、コンテキストではない。読み取り専用の参照データ（`mst_*`）と、その同期（バージョン確認・更新判定・差分ダウンロード）だけを持つ。バージョン確認はマスター同期の一部として置き、`contexts/version` は作らない。
+
+| ルール | 内容 |
+| --- | --- |
+| 構成 | `domain/`（mst の読み取りモデル、Repository の契約、同期 UseCase）と `data/`（SQLite 接続、差分ダウンロード、ハッシュ管理、mst Repository の実装、version API 呼び出し）。`mst_unit` など個別テーブルの Repository・読み取りモデルもここに置く |
+| `contexts/*` → `master_data/domain` | **許可（読み取りのみ）**。各コンテキストは `master_data/domain` の公開 UseCase / Repository 契約を使う。`master_data/data` は参照しない |
+| `master_data` → `contexts/*` | **禁止** |
+| `master_data` → `core` | 使える（`ApiClient`・`ApiConfig`・`Result`・`AppError`・`EventBus`）。`core` は `master_data` に依存しない |
+| ビジネスルール | 置かない（参照と同期だけ）。マスターを使った計算・判定は各コンテキストの UseCase が行う |
+| ApiClient との循環 | core の契約（token / `master_hash` の供給）と `EventBus`（`master_update_required` の受け手は `master_data`）で解く。変更なし |
+| 層 | `master_data` も presentation / domain / data の 3 層の規則（2 節）に従う。UI は持たない |
+
+依存方向は、スクリプトで検査する（9 節）。違反は設計の誤りとして直し、検査を緩めない。
+
+## 3. 層ごとの責務
+
+### core
+
+| 層 | 置くもの |
+| --- | --- |
+| `core/domain/` | `Result`（成功/失敗の基底）、`AppError`（失敗の種別 `kind`・`error_code`・`message`・`retry_after`・メンテナンス情報）、`EventBus`、`JsonReader`（null と欠落を同一に扱う読み取り）。API クライアントから見た契約（例: トークンの供給と refresh、`master_hash` の供給）もここに置き、実装は contexts が持つ |
+| `core/data/` | `http/ApiClient`（HTTP の窓口。分類・401 の自動 refresh・冪等キー・`X-Master-*` ヘッダー）、`http/ApiResult`（通信結果の値）、`config/ApiConfig`（ベース URL と配信ホスト）、`storage/`（ファイル・設定の薄い入れ物） |
+| `core/presentation/` | `Toast`（オートロード）、ローディング、エラーダイアログなどの共通 UI。エラー種別ごとの表示文言の共通部分もここ |
+
+### contexts/{context}
+
+| 層 | 置くもの | 備考 |
+| --- | --- | --- |
+| `presentation/{screen}/` | `.tscn` と `*_presenter.gd` | UI 制御とシグナル接続だけ。業務の判断はしない。UseCase だけを呼ぶ |
+| `domain/entities/` | サーバー状態の読み取りモデル、クライアント固有の状態（セッション・再試行など） | サーバーの項目名に合わせる。基底は `RefCounted`（既定）。`Resource` は下の基準を満たすときだけ |
+| `domain/use_cases/` | `*_use_case.gd` と、必要なときだけ結果の型 `*_result.gd` | 入口は `handle()`。1 操作 1 つ。成否だけなら `Result` をそのまま返す。値を返すときだけ専用の結果型（UseCase ごと。共用しない）。`await` してよい |
+| `domain/repositories/` | Repository の**契約**（基底クラス）。テストで偽物に差し替える Repository にだけ作る | メソッドは `push_error("未実装")` を持つ。UseCase はこの型で受ける |
+| `data/api/` | API 呼び出しの部品と、項目の多い API 応答の型（`*_response.gd`） | 応答を型付きに変換し、null と欠落（D3）を処理する。`ApiClient` を使う |
+| `data/local/` | ローカル保存の部品（ファイル・SQLite・設定） | |
+| `data/repositories/` | 契約の実装（`*_api_repository.gd`、`local_*_repository.gd`） | `ApiResult` を `AppError` に直して `Result` で返す |
+
+**`Resource` か `RefCounted` か**: 既定は `RefCounted`。`Resource` は、`.tres` / `ResourceSaver` / `@export` を**実際に使う**ものだけ。
+- `Resource`: 上記を使うデータ。entities は、既存 models（現状はすべて `RefCounted`）を `Resource` に変えず、必要が出たものを都度判断する
+- `RefCounted`: API 応答の型、メモリのみの読み取りモデル、UseCase の結果、`AppError`、契約、クライアント固有の状態
+- どちらでも domain は `Node` / `HTTPRequest` / シーンに依存しない（`Resource` は `RefCounted` の派生）
+
+**軽量化の指針**（3 層は維持する）:
+1. 契約（基底クラス）は、テストで偽物に差し替える Repository にだけ作る
+2. 成否だけの UseCase は `Result` をそのまま使い、専用の `*_result.gd` を作らない
+3. API 応答の型（`*_response.gd`）は、項目の多い login・version だけに作る。他は最小限にする（小さい応答は data の中で値に取り出す）
+
+### app
+
+| ファイル | 責務 |
+| --- | --- |
+| `app_context.gd`（オートロード） | 起動時に ApiClient・Repository 実装・UseCase を組み立てる唯一の場所。presenter へ UseCase を渡す（`AppContext.login_use_case()` のような取得メソッド。presenter はオートロード名で参照する）。EventBus の購読（受け手）の登録もここ。`_ready` では他のオートロードを呼ばない |
+| `scene_router.gd`（オートロード） | 画面遷移。遷移先はコンテキストの presentation のシーン。presenter が `SceneRouter.goto_*()` で呼ぶ |
+
+## 4. 3 層にした理由と、DDD を軽量にする方針
+
+**3 層（presentation / domain / data）の理由**: モバイルアプリの一般的な Clean Architecture の呼び名に合わせ、読む人・ライブラリ・事例の知識をそのまま使えるようにした。サーバーとは**コンテキスト名を揃え、層の呼び名は揃えない**（サーバーは Laravel の Controller / UseCase / Service / Repository。クライアントには Controller も DB トランザクションも無い）。UseCase は domain に置き、API・保存の実装は data が domain の契約を実装して受け持つ。
+
+**DDD を軽量にする方針**:
+
+
+サーバーが正で、クライアントはビジネスルールを持たない。重い DDD（豊富な不変条件、値オブジェクトの網羅、集約の設計）を持ち込むと、サーバーの規則を二重に書いて食い違う。次の範囲に絞る。
+
+| 項目 | 方針 |
+| --- | --- |
+| コンテキスト名 | サーバーの `Domain/{Context}` に揃える。対応が一目で分かり、設計書（サーバー側 `docs/design/`）を引きやすい。**`master_data` は対応する Domain なし**。サーバーの Version（バージョン確認 API）と `mst_*`（各機能のマスター）を、クライアントでは 1 つの共有モジュール `master_data/` にまとめる |
+| エンティティ | **サーバー状態の読み取りモデル**が中心。サーバーの項目名・型に合わせ、独自の計算・判定を足さない |
+| 集約・不変条件 | **クライアント固有の状態**（画面遷移・再試行の段階・セッション・冪等キー）に限る。例: タイトルの段階（MASTER / AUTH / LOGIN）と失敗した段階の記憶 |
+| 値オブジェクト | 必要になった時点で足す。最初から作らない |
+| ドメインサービス・ドメインイベント | 他コンテキストへの通知は `EventBus` のシグナルで足りる。独自のイベント基盤は作らない |
+
+迷ったときは「サーバーが決めることか」で判断する。サーバーが決めることは、クライアントでは表示用の読み取りモデルにとどめる。
+
+## 5. リクエスト（画面操作）の流れの例
+
+タイトル画面での、マスターデータ確認 → 認証 → ログインを通してたどる（設計は `docs/design/title-to-home/client_design.md`）。
+
+```
+presenter     auth/presentation/title/title_presenter.gd          段階（MASTER → AUTH → LOGIN）を await で直列に進める
+UseCase       master_data/domain/use_cases/check_master_data_use_case.gd
+              auth/domain/use_cases/authenticate_use_case.gd
+              login/domain/use_cases/login_use_case.gd
+契約          auth/domain/repositories/auth_repository.gd          （基底クラス。メソッドは「未実装」）
+実装          auth/data/repositories/auth_api_repository.gd       sign_in / sign_up と署名
+変換          login/data/api/login_response.gd                    API 応答 → 型付きオブジェクト（項目の多い login のみ。null と欠落をここで処理）
+HTTP          core/data/http/api_client.gd               分類・401 の refresh・冪等キー・X-Master-*
+保存          auth/data/repositories/local_auth_token_repository.gd
+```
+
+1. `title_presenter` が `AppContext` から UseCase を受け取り、段階 1 で `check_master_data_use_case.handle()` を `await` する。失敗でも次へ進み、通知だけ出す
+2. 段階 2 で `authenticate_use_case.handle()`。UseCase は `AuthRepository`（契約）の `sign_in()` / `sign_up()` を呼び、10002 / 10004 の切り替えという**操作の規則**を持つ。署名・HTTP は知らない
+3. 実装の `auth_api_repository` が `ApiClient.request(...)` を呼ぶ。`ApiClient` は 401 なら refresh して 1 回だけ再送する。refresh に使うトークンは、core が定義した契約を auth の `local_auth_token_repository` が実装して供給する（core は auth を参照しない）
+4. `auth_api_repository` が応答からトークンを取り出し（項目が少ないので専用の応答型は作らない）、失敗なら `ApiResult` を `AppError`（種別つき）に直して `Result` で返す
+5. UseCase が成功時にトークンを `local_auth_token_repository` に保存し、`Result` を返す
+6. 段階 3 で `login_use_case.handle(idempotency_key)`。`login_api_repository` が `POST /auth/login` を送り、`login_response` に変換する。UseCase は、プレイヤー・所持データを `player` コンテキストの公開 UseCase（`apply_login_data_use_case`）に渡し、ログインボーナスは自コンテキストの Repository に保持する
+7. presenter は `Result` の成否で、エラー文と「再試行」を出す（`core/presentation` の共通表示を使う）か、オートロード名 `SceneRouter` で次の画面へ進む（presenter が UseCase を受け取る `AppContext`、`SceneRouter` は、presentation にだけ許すオートロード名での参照。2 節）
+8. refresh が失敗してセッションを破棄するときは、`ApiClient` が `EventBus.session_expired` を出す。`auth`（トークン）・`player`（所持データ）・`login`（ログインボーナス）が受け手になり、状態を空にする（受け手の登録は `AppContext`）。`master_data` は `session_expired` を受けない（マスターは端末のもので残す）。受けるのは `master_update_required` だけ。`ApiClient` はこれらを直接呼ばない
+
+マスターデータの更新要求（`X-Master-Update-Required`）も同じ形で、`ApiClient` が `EventBus.master_update_required` を出し、`master_data` が受ける。
+
+## 6. 命名
+
+| 種類 | ファイル名 | class_name の例 |
+| --- | --- | --- |
+| UseCase | `*_use_case.gd` | `LoginUseCase` |
+| UseCase の結果（値を返すときだけ） | `*_result.gd`（`Result` を継承） | `CheckMasterDataResult` |
+| presenter | `*_presenter.gd` | `TitlePresenter` |
+| Repository の契約（domain） | `*_repository.gd` | `AuthRepository` |
+| Repository の実装（保存） | `local_*_repository.gd` | `LocalAuthTokenRepository` |
+| Repository の実装（API） | `*_api_repository.gd` | `AuthApiRepository` |
+| API 応答の型（項目の多いものだけ） | `*_response.gd` | `LoginResponse` |
+| エンティティ | 名詞（サーバーのモデル名に寄せる） | `Player`, `LoginBonus` |
+
+- 1 ファイル 1 クラス。`class_name` にはファイル名のパスカルケースを付ける
+- **例外: オートロードのスクリプト（`EventBus` / `AppContext` / `SceneRouter` / `Toast`）には `class_name` を付けない**。オートロード名と同じ `class_name` は Godot 4 で「Class hides an autoload singleton」エラーになる。呼び出し側はオートロード名で参照する
+- 型付き変数を使う（契約の型で受ける: `var _repo: AuthRepository`）
+- 識別子は英語、コメントは日本語（[language.md](./language.md)）
+
+## 7. GDScript での契約（interface が無い）
+
+GDScript に interface が無いので、契約は**基底クラス**で表す。
+
+```gdscript
+# contexts/auth/domain/repositories/auth_repository.gd
+class_name AuthRepository
+extends RefCounted
+
+func sign_in(_device_id: String) -> Result:
+	push_error("未実装: AuthRepository.sign_in")
+	return null
+```
+
+- 実装は `extends AuthRepository` でメソッドを上書きする
+- UseCase は `AuthRepository` 型の変数で受け、AppContext が実装を渡す。テストでは偽の実装を渡す
+- 契約・結果の型は、他の層の `class_name` を `preload` せず**型注釈**で参照する。`preload` どうしの循環を作らない（依存チェックで `preload` の循環も検出する）
+- ファイルの移動・改名: Godot 4.4 以降（本プロジェクトは 4.7）は `.gd` の隣に `.gd.uid` がある。**`git mv` で `.gd` と `.gd.uid` を一緒に動かす**。エディタ外で動かしたら、`[autoload]`・`preload`・`load` のパス文字列を grep で直す（`.tscn` の `ext_resource` は uid で解決される）
+
+## 8. 移行方針
+
+現行コードは約 3,100 行 / 25 ファイル（`scenes/` と `scripts/` の `.gd`。`wc -l` で数えた）。
+
+既存ファイルは**機能単位**で新構成へ移す。ファイルを 1 つずつ先に動かさず、機能（例: タイトル〜ホーム）を実装するときに、触るファイルを新構成へ移す。
+
+### 既存ファイルの行き先
+
+| 現在 | 行き先 |
+| --- | --- |
+| `scripts/services/api_client.gd` / `api_result.gd` | `core/data/http/` |
+| `scripts/config/api_config.gd` | `core/data/config/` |
+| `scripts/utils/json_reader.gd` | `core/domain/json_reader.gd` |
+| `scripts/services/auth_service.gd` | `contexts/auth/domain/use_cases/`（`authenticate_use_case.gd`）と `data/`（`repositories/auth_api_repository.gd`、`api/` の署名・応答の型）に分解 |
+| `scripts/managers/user_data_manager.gd` | トークンは `contexts/auth/data/`（`repositories/local_auth_token_repository.gd`）、所持データは `contexts/player/`、ログインボーナスは `contexts/login/` に分解 |
+| `scripts/managers/master_data_manager.gd` / `scripts/repositories/mst_*` / `scripts/models/mst/*` | `master_data/`（`domain/` に同期 UseCase・契約・読み取りモデル、`data/` に SQLite・ダウンロード・Repository 実装。`contexts/` の下ではない） |
+| `scripts/models/sys/*`・`trx/*` | `auth`・`agreement`・`player` の `domain/entities/` |
+| `scenes/title/` | `contexts/auth/presentation/title/` |
+| `scenes/agreement/` | `contexts/agreement/presentation/agreement/` |
+| `scenes/login_bonus/` | `contexts/login/presentation/login_bonus/` |
+| `scenes/home/` | `contexts/player/presentation/home/` |
+| `scenes/api_test/` | debug 専用の置き場（`debug/`。エクスポート除外） |
+| `scripts/managers/scene_manager.gd` | `app/scene_router.gd`（`class_name` なし） |
+| `scripts/managers/toast_manager.gd` | `core/presentation/` |
+| `scripts/tests/*` | `tests/unit/`（`core/` と `contexts/` をミラー） |
+
+### 旧構成と新構成が混在する期間のルール
+
+- 移行する機能の単位は**コンテキスト**（core と `master_data/` も 1 単位）。コンテキストの一部だけ移した状態を残さない。**例外: 最初の移行は core・`master_data/` と関係するコンテキストを一括で行う**（`ApiClient` がトークンと `master_hash` の契約を要するため、core だけ・auth だけでは成立しない）
+- 新構成のコードは旧構成（`scripts/` と `scenes/`）を参照しない。旧が新を呼ぶのは、移行中の窓口（旧ファイルから新しい UseCase を呼ぶ薄い転送）としてのみ許す。転送には `# 移行用` と書き、機能の移行完了で削除する
+- 旧オートロード（`UserDataManager` など）が状態を持つ間は、新構成の Repository が同じ値を読み書きする形にせず、**状態の持ち主を 1 つにする**。持ち主を新構成の Repository に移した時点で、旧オートロードは削除する。旧オートロード（`UserDataManager`）が残る間は、旧側も `EventBus.session_expired` を受ける移行用転送を置く（新 `ApiClient` の refresh 失敗で旧状態も空にするため）
+- 旧構成のファイルへの新規の機能追加はしない（バグ修正のみ）
+- ファイルを動かす PR は、動作を変えない移動だけの PR と、機能変更の PR を分ける。`.uid` と参照の切れを確認する
+- 新しい機能は、最初から新構成で書く
+
+## 9. debug 用の置き場とツール
+
+- e2e ドライバー・`api_test` など開発専用のものは `debug/`（または `tests/e2e/`）に置き、**エクスポートから除外する**か、debug ビルドだけのオートロードにする。製品ビルドに入れない
+- `tests/` と `debug/` は `app/` の参照を許す（e2e は AppContext を通して動かす）。ただし `contexts/` と `core/` からは参照しない
+
+ツール（導入の時期は未決）:
+
+| 種類 | 内容 | 状況 |
+| --- | --- | --- |
+| 依存方向チェック | `res://` のパスと `preload` / `class_name` の参照を読み、2 節の違反を検出するスクリプト（サーバーの `ModuleBoundaryTest` に相当） | 未決（移行の最初の機能と同時が望ましい） |
+| gdlint / gdformat | 規約の自動検査と整形（gdtoolkit） | 未決 |
+| テスト | GUT または GdUnit4。`tests/` に `contexts/` と `core/` をミラーして置く。domain と UseCase は Repository の偽実装で単体テストを書く | 未決（どちらを使うか・導入時期とも） |
+
+## 10. 画面の流れ
+
+| 画面 | シーン（移行後） | 説明 |
+| --- | --- | --- |
+| タイトル | `contexts/auth/presentation/title/title.tscn` | version 確認 → 認証 → login |
+| 規約 | `contexts/agreement/presentation/agreement/agreement.tscn` | 未同意の規約があるときだけ表示。同意を送る |
+| ログインボーナス | `contexts/login/presentation/login_bonus/login_bonus.tscn` | login の結果を表示する（通信しない） |
+| ホーム | `contexts/player/presentation/home/home.tscn` | メインメニュー |
+| API テスト | `tests/e2e/` か debug 専用 | デバッグ用 |
+
+遷移: タイトル → 規約 → ログインボーナス → ホーム。login が成功するまで先へ進まない（詳細は `docs/design/title-to-home/client_design.md`）。
+
+## 11. API 通信と認証（要点）
+
+詳細は [api.md](./api.md) とサーバーの api.md。
+
+- 通信は `core/data/http/ApiClient` に一本化する。HTTP ステータスで失敗を分類し（NETWORK / MAINTENANCE / RATE_LIMITED / CONFLICT / BUSINESS 〔HTTP 299〕/ SESSION_EXPIRED など）、`AppError` として上位に渡す
+- 認証は device_id ベース（sign_up は HMAC-SHA256 署名つき、sign_in）。保存トークンの有無で最初に呼ぶ API を決める。振り分けは `auth` の UseCase が持つ
+- 401 は `ApiClient` が refresh して 1 回だけ再送する。refresh 失敗は `EventBus.session_expired` で知らせる
+- 変更を伴う認証付き POST（login・consent）には `X-Unique-Request-Identifier`（冪等キー）を付ける。キーの寿命は「ひとつの操作」で、持つのは presenter（操作の呼び出し元）
+- API のベース URL と配信ホストは `ApiConfig` の 1 か所

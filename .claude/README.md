@@ -18,40 +18,46 @@
 
 ## ディレクトリ構成
 
+クリーンアーキテクチャ（presentation / domain / data の 3 層）+ 軽量 DDD。詳細は [architecture.md](./architecture.md)。下は移行後の構成で、既存ファイルは機能単位で順に移す（行き先は architecture.md 8 節）。
+
 ```
 NexusGodotMobileGameClient/
-├── scenes/                    # Godotシーン（UI + シーンロジック）
-│   ├── title/                 # タイトル画面（認証 → ログイン）
-│   ├── login_bonus/           # ログインボーナス表示画面
-│   ├── home/                  # ホーム画面
-│   └── api_test/              # APIデバッグテスト画面
-├── scripts/
-│   ├── managers/              # オートロードのグローバルマネージャー
-│   │   ├── user_data_manager.gd   # 認証状態・ゲームデータ管理
-│   │   ├── scene_manager.gd       # シーン遷移管理
-│   │   └── master_data_manager.gd # マスターデータ管理
-│   ├── services/              # 通信サービス
-│   │   ├── api_client.gd      # 汎用APIクライアント（HTTP 299対応、自動リフレッシュ）
-│   │   └── auth_service.gd    # 認証専用サービス（HMAC-SHA256署名）
-│   ├── models/                # データモデル
-│   │   ├── mst/               # マスターデータモデル
-│   │   ├── sys/               # システムデータモデル
-│   │   └── trx/               # トランザクションモデル
-│   └── repositories/          # リポジトリ（マスターデータ取得）
+├── app/                       # 合成ルート
+│   ├── app_context.gd         #   依存の組み立て（オートロード）
+│   └── scene_router.gd        #   画面遷移（オートロード）
+├── core/                      # 共有カーネル
+│   ├── domain/                #   Result, AppError, EventBus, JsonReader
+│   ├── data/                  #   http/（ApiClient・ApiResult）, config/（ApiConfig）, storage/
+│   └── presentation/          #   Toast, ローディング, エラーダイアログ
+├── master_data/               # 読み取り専用の参照データ（コンテキストに属さない共有モジュール）
+│   ├── domain/                #   mst の読み取りモデル、契約、同期 UseCase（バージョン確認・更新判定）
+│   └── data/                  #   SQLite、差分ダウンロード、ハッシュ管理、mst Repository、version API
+├── contexts/                  # サーバーの Domain/{Context} と同じ名前（master_data は含めない）
+│   ├── auth/                  #   認証、タイトル画面
+│   ├── agreement/             #   規約の取得・同意、規約画面
+│   ├── login/                 #   login、ログインボーナス画面
+│   ├── player/                #   プレイヤー・所持データ、ホーム画面
+│   │   └── {presentation, domain(entities, use_cases, repositories), data(api, local, repositories)}
+│   └── （今後: gacha / unit / equipment …）
+├── tests/                     # core/・master_data/・contexts/ をミラー（unit / integration / e2e）
+├── assets/                    # アセット
 ├── addons/                    # Godotアドオン
 ├── data/                      # ローカルデータ（SQLiteなど）
-└── docs/                      # ドキュメント
+└── docs/                      # ドキュメント（design/<機能>/client_design.md）
 ```
+
+> 現在は移行前で、`scenes/` と `scripts/`（managers / services / models / repositories）の旧構成が残っている。
 
 ## ドキュメント構成
 
 | ファイル | 説明 |
 |---------|------|
 | [language.md](./language.md) | **言語設定（日本語で対応）** |
-| [architecture.md](./architecture.md) | アーキテクチャ設計 |
+| [architecture.md](./architecture.md) | アーキテクチャ設計（3 層・コンテキスト・依存ルール・命名・移行方針） |
 | [coding-standards.md](./coding-standards.md) | コーディング規約 |
 | [api.md](./api.md) | サーバAPIとの通信仕様 |
 | [implementation-history.md](./implementation-history.md) | **実装履歴** |
+| `docs/design/<機能>/client_design.md` | 機能ごとのクライアント設計 |
 
 ## 📁 `.opencode/` について
 
