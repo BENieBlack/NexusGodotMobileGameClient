@@ -1,0 +1,53 @@
+# クライアントの CI。ローカルの `make check` と同じ検査を、クリーンな環境で 1 ジョブにまとめて回す。
+# 流れ: checkout → Python と Godot を用意 → gdtoolkit を入れる → make check
+#       （依存方向 → lint → format → GdUnit4 のテスト）。どれか 1 つでも失敗すればジョブが失敗し、PR に失敗が表示される。
+# 検査の中身は Makefile が持つので、ここには検査コマンドを重複して書かない（ローカルと CI の食い違いを防ぐ）。
+name: CI
+
+# 実行のきっかけ: main への push と、すべての PR
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同じブランチの古い実行は止める
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# 読み取りだけ。検査にリポジトリへの書き込み権限は要らない（最小権限）
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    # 検査が固まっても 15 分で打ち切る（待ち時間と課金の上限）
+    timeout-minutes: 15
+    steps:
+      # ソースを取得する
+      - uses: actions/checkout@v7.0.1
+
+      # 依存方向チェック（tools/check_dependencies.py）と gdtoolkit が使う Python
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: "3.12"
+
+      # Godot 4.7.x（.NET なし）。テストのヘッドレス実行に使う。
+      # Makefile は GODOT_BIN（未指定なら PATH 上の godot）で Godot を呼ぶ。
+      # テストが「godot が見つからない」で落ちたら、このステップの設定を疑う。
+      # 版を上げるときは、ローカルの Godot と project.godot の対象版も合わせる
+      - uses: chickensoft-games/setup-godot@v2.4.3
+        with:
+          version: 4.7.2
+          use-dotnet: false
+
+      # lint / format 用の Python 環境（.venv-tools）を作る。以降の make lint / format-check が使う
+      - name: ツールを入れる（gdtoolkit）
+        run: make setup-tools
+
+      # 依存方向 → lint → format → テスト（ローカルの make check と同じ）。最初に失敗した段で止まり、ログに原因が出る
+      # 注意: addons/godot-sqlite のネイティブバイナリは git に入っていない。
+      # sqlite を使うテストを足すときは、CI でバイナリを用意する手順を足す
+      - name: make check
+        run: make check

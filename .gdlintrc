@@ -1,0 +1,64 @@
+# gdlint（gdtoolkit）の設定。make lint と CI が読む。
+#
+# このファイルは `gdlint -d`（既定値の出力）を土台にした全項目の一覧で、既定値から変えているのは
+# excluded_directories だけ。命名規則（snake_case の関数・変数、PascalCase のクラス名、
+# UPPER_SNAKE の定数）は、.claude/architecture.md の 6 節と coding-standards.md に合わせてあり、
+# 既定値のまま使っている。規則を変えたい項目は、この一覧の該当行を書き換え、理由を上にコメントする。
+# gdtoolkit の版を上げると既定値が増減することがあるので、上げたら `gdlint -d` の出力と見比べる。
+#
+# 値の読み方: 値が null の項目は、その検査を無効にしている（gdlint の既定）。
+# 命名の項目は正規表現（例: _?[a-z][a-z0-9]*(_[a-z0-9]+)* は、先頭の _ を許す snake_case）。
+class-definitions-order:
+- tools
+- classnames
+- extends
+- docstrings
+- signals
+- enums
+- consts
+- staticvars
+- exports
+- pubvars
+- prvvars
+- onreadypubvars
+- onreadyprvvars
+- others
+class-load-variable-name: (([A-Z][a-z0-9]*)+|_?[a-z][a-z0-9]*(_[a-z0-9]+)*)
+class-name: ([A-Z][a-z0-9]*)+
+class-variable-name: _?[a-z][a-z0-9]*(_[a-z0-9]+)*
+comparison-with-itself: null
+constant-name: _?[A-Z][A-Z0-9]*(_[A-Z0-9]+)*
+disable: []
+duplicated-load: null
+enum-element-name: '[A-Z][A-Z0-9]*(_[A-Z0-9]+)*'
+enum-name: ([A-Z][a-z0-9]*)+
+# lint しない場所。.godot（エンジンの生成物）・.venv-tools（lint 用の Python 環境）・
+# addons（GdUnit4 などの外部ライブラリ。自分たちの規約を当てない）。ここだけ既定値に足している
+excluded_directories: !!set
+  .git: null
+  .godot: null
+  .venv-tools: null
+  addons: null
+expression-not-assigned: null
+function-argument-name: _?[a-z][a-z0-9]*(_[a-z0-9]+)*
+function-arguments-number: 10
+# 関数名は snake_case。シグナルの受け口 _on_<Node名>_<signal> だけ、Node 名の PascalCase を許す
+function-name: (_on_([A-Z][a-z0-9]*)+(_[a-z0-9]+)*|_?[a-z][a-z0-9]*(_[a-z0-9]+)*)
+function-preload-variable-name: ([A-Z][a-z0-9]*)+
+function-variable-name: '[a-z][a-z0-9]*(_[a-z0-9]+)*'
+load-constant-name: (([A-Z][a-z0-9]*)+|_?[A-Z][A-Z0-9]*(_[A-Z0-9]+)*)
+loop-variable-name: _?[a-z][a-z0-9]*(_[a-z0-9]+)*
+max-file-lines: 1000
+# 1 行の長さの上限（gdformat の既定の折り返し幅と同じ。食い違うと format と lint が互いに直し合う）
+max-line-length: 100
+max-public-methods: 20
+max-returns: 6
+mixed-tabs-and-spaces: null
+no-elif-return: null
+no-else-return: null
+signal-name: '[a-z][a-z0-9]*(_[a-z0-9]+)*'
+sub-class-name: _?([A-Z][a-z0-9]*)+
+tab-characters: 1
+trailing-whitespace: null
+unnecessary-pass: null
+unused-argument: null

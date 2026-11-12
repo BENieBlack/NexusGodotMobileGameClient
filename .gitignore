@@ -2,3 +2,12 @@
 .godot/
 /android/
 .DS_Store
+
+# テスト・検査の出力とツール用 venv
+/reports/
+/.make-logs/
+/.venv-tools/
+__pycache__/
+
+# サードパーティのテスト基盤。tools/install_gdunit4.sh が版を固定して入れる（git には入れない）
+/addons/gdUnit4/

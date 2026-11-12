@@ -70,7 +70,7 @@ presentation ──▶ domain ◀── data（domain の契約を実装する�
 | `master_data` → `contexts/*` | **禁止** |
 | `master_data` → `core` | 使える（`ApiClient`・`ApiConfig`・`Result`・`AppError`・`EventBus`）。`core` は `master_data` に依存しない |
 | ビジネスルール | 置かない（参照と同期だけ）。マスターを使った計算・判定は各コンテキストの UseCase が行う |
-| ApiClient との循環 | core の契約（token / `master_hash` の供給）と `EventBus`（`master_update_required` の受け手は `master_data`）で解く。変更なし |
+| ApiClient との循環 | core の契約（token / `master_hash` の供給）と `ApiClient` のシグナルと `EventBus`（`AppContext` が中継。`master_update_required` の受け手は `master_data`）で解く |
 | 層 | `master_data` も presentation / domain / data の 3 層の規則（2 節）に従う。UI は持たない |
 
 依存方向は、スクリプトで検査する（9 節）。違反は設計の誤りとして直し、検査を緩めない。
@@ -111,7 +111,7 @@ presentation ──▶ domain ◀── data（domain の契約を実装する�
 
 | ファイル | 責務 |
 | --- | --- |
-| `app_context.gd`（オートロード） | 起動時に ApiClient・Repository 実装・UseCase を組み立てる唯一の場所。presenter へ UseCase を渡す（`AppContext.login_use_case()` のような取得メソッド。presenter はオートロード名で参照する）。EventBus の購読（受け手）の登録もここ。`_ready` では他のオートロードを呼ばない |
+| `app_context.gd`（オートロード） | 起動時に ApiClient・Repository 実装・UseCase を組み立てる唯一の場所。presenter へ UseCase を渡す（`AppContext.login_use_case()` のような取得メソッド。presenter はオートロード名で参照する）。EventBus の購読（受け手）の登録と、`ApiClient` のシグナル（`session_expired` / `master_update_required`）の `EventBus` への中継もここ。`_ready` では他のオートロードを呼ばない |
 | `scene_router.gd`（オートロード） | 画面遷移。遷移先はコンテキストの presentation のシーン。presenter が `SceneRouter.goto_*()` で呼ぶ |
 
 ## 4. 3 層にした理由と、DDD を軽量にする方針
@@ -156,9 +156,9 @@ HTTP          core/data/http/api_client.gd               分類・401 の refres
 5. UseCase が成功時にトークンを `local_auth_token_repository` に保存し、`Result` を返す
 6. 段階 3 で `login_use_case.handle(idempotency_key)`。`login_api_repository` が `POST /auth/login` を送り、`login_response` に変換する。UseCase は、プレイヤー・所持データを `player` コンテキストの公開 UseCase（`apply_login_data_use_case`）に渡し、ログインボーナスは自コンテキストの Repository に保持する
 7. presenter は `Result` の成否で、エラー文と「再試行」を出す（`core/presentation` の共通表示を使う）か、オートロード名 `SceneRouter` で次の画面へ進む（presenter が UseCase を受け取る `AppContext`、`SceneRouter` は、presentation にだけ許すオートロード名での参照。2 節）
-8. refresh が失敗してセッションを破棄するときは、`ApiClient` が `EventBus.session_expired` を出す。`auth`（トークン）・`player`（所持データ）・`login`（ログインボーナス）が受け手になり、状態を空にする（受け手の登録は `AppContext`）。`master_data` は `session_expired` を受けない（マスターは端末のもので残す）。受けるのは `master_update_required` だけ。`ApiClient` はこれらを直接呼ばない
+8. refresh が失敗してセッションを破棄するときは、`ApiClient` が自分のシグナル `session_expired` を出し、`AppContext` がそれを `EventBus.session_expired` に中継する（`core/data` はオートロード名を参照しない。依存チェック A1）。`auth`（トークン）・`player`（所持データ）・`login`（ログインボーナス）が受け手になり、状態を空にする（受け手の登録は `AppContext`）。`master_data` は `session_expired` を受けない（マスターは端末のもので残す）。受けるのは `master_update_required` だけ。`ApiClient` はこれらを直接呼ばない
 
-マスターデータの更新要求（`X-Master-Update-Required`）も同じ形で、`ApiClient` が `EventBus.master_update_required` を出し、`master_data` が受ける。
+マスターデータの更新要求（`X-Master-Update-Required`）も同じ形で、`ApiClient` が自分のシグナル `master_update_required` を出し、`AppContext` が `EventBus.master_update_required` に中継して、`master_data` が受ける。
 
 ## 6. 命名
 
@@ -237,13 +237,36 @@ func sign_in(_device_id: String) -> Result:
 - e2e ドライバー・`api_test` など開発専用のものは `debug/`（または `tests/e2e/`）に置き、**エクスポートから除外する**か、debug ビルドだけのオートロードにする。製品ビルドに入れない
 - `tests/` と `debug/` は `app/` の参照を許す（e2e は AppContext を通して動かす）。ただし `contexts/` と `core/` からは参照しない
 
-ツール（導入の時期は未決）:
+ツール（導入済み。コマンドは [CLAUDE.md](../CLAUDE.md) のコマンド表）:
 
-| 種類 | 内容 | 状況 |
+| 種類 | 内容 | 実行 |
 | --- | --- | --- |
-| 依存方向チェック | `res://` のパスと `preload` / `class_name` の参照を読み、2 節の違反を検出するスクリプト（サーバーの `ModuleBoundaryTest` に相当） | 未決（移行の最初の機能と同時が望ましい） |
-| gdlint / gdformat | 規約の自動検査と整形（gdtoolkit） | 未決 |
-| テスト | GUT または GdUnit4。`tests/` に `contexts/` と `core/` をミラーして置く。domain と UseCase は Repository の偽実装で単体テストを書く | 未決（どちらを使うか・導入時期とも） |
+| 依存方向チェック | `tools/check_dependencies.py`（Python 標準ライブラリのみ）。`app/ core/ master_data/ contexts/ tests/ debug/` の `*.gd` を対象に、`preload` / `load` / `extends` の `res://` パス、`class_name` の使用、`[autoload]` 名の参照を読み、違反を `パス:行: [ID] 内容` で出して終了コード 1 にする。旧構成（`scripts/` `scenes/`）は検査せずスキップ数を表示する。抑止コメントは用意しない。単体テストは `tools/tests/` | `make check-deps` |
+| gdlint / gdformat | gdtoolkit 4.5.0（`tools/requirements.txt`、`.venv-tools/` に入れる）。設定は `.gdlintrc`（命名は 6 節と coding-standards.md のとおり snake_case / PascalCase）。対象は新構成のディレクトリだけ | `make lint` / `make format-check` / `make format` |
+| テスト | **GdUnit4**（v6.2.3。`addons/gdUnit4/` は git に入れず、`tools/install_gdunit4.sh` が版とコミット SHA を固定して取得する。`make setup-tools` / `make test` が自動で呼ぶ）。Godot 4.7 に対応し、CLI でヘッドレス実行と JUnit XML 出力ができるため採用。`tests/` に `contexts/` `master_data/` `core/` をミラーして置く。domain と UseCase は Repository の偽実装で単体テストを書く。結果は `reports/`（git 管理外） | `make test` / `make test-quiet` |
+
+依存方向チェックのルール ID（2 節・2-1・6 節の規則に対応）:
+
+| ID | 内容 |
+| --- | --- |
+| D1 | domain は presentation・data を参照しない |
+| D2 | domain はエンジン依存（Node 系の継承、`HTTPRequest` / `FileAccess` / `DirAccess` / `PackedScene` / `SceneTree`、`get_tree()`、`.tscn` の `preload` / `load`）を持たない。オートロードのスクリプトは Node 継承が必須なので対象外 |
+| P1 | presentation は data を参照しない |
+| P2 | presentation が参照できる他コンテキストは `domain/use_cases/` だけ |
+| Da1 | data は presentation と他コンテキストを参照しない |
+| X1 | コンテキスト間は相手の `domain/use_cases/` だけ参照できる |
+| M1 | contexts は `master_data/data` を参照しない（`master_data/domain` だけ可） |
+| M2 | `master_data` は contexts と app を参照しない |
+| C1 | core は contexts・master_data・app を参照しない |
+| A1 | `res://app/` のパス参照は contexts・master_data・core から禁止。オートロード名の参照は presentation（と `core/presentation`、app、tests、debug）だけ |
+| L1 | `[autoload]` のスクリプトは `class_name` を宣言しない |
+| N1 | 命名: `*_use_case.gd` は `domain/use_cases/`、`*_presenter.gd` は `presentation/`、`*_api_repository.gd` / `local_*_repository.gd` は `data/repositories/`、`*_response.gd` は `data/api/` にだけ置く。`class_name` はファイル名のパスカルケース（オートロード除く） |
+| Y1 | `preload` / `extends` のパスの循環 |
+| S1 | `core/` `master_data/` `contexts/<ctx>/` のファイルは presentation / domain / data のいずれかの下に置く |
+| O1 | 新構成のコードは旧構成（`scripts/` `scenes/`）を参照しない（8 節） |
+| T1 | 本番コード（app / core / master_data / contexts）は `tests/` `debug/` を参照しない |
+
+`app/`・`tests/`・`debug/` は参照の制限を受けない（`tests/` `debug/` は D2 以外の層の規則も対象外）。
 
 ## 10. 画面の流れ
 
@@ -263,6 +286,6 @@ func sign_in(_device_id: String) -> Result:
 
 - 通信は `core/data/http/ApiClient` に一本化する。HTTP ステータスで失敗を分類し（NETWORK / MAINTENANCE / RATE_LIMITED / CONFLICT / BUSINESS 〔HTTP 299〕/ SESSION_EXPIRED など）、`AppError` として上位に渡す
 - 認証は device_id ベース（sign_up は HMAC-SHA256 署名つき、sign_in）。保存トークンの有無で最初に呼ぶ API を決める。振り分けは `auth` の UseCase が持つ
-- 401 は `ApiClient` が refresh して 1 回だけ再送する。refresh 失敗は `EventBus.session_expired` で知らせる
+- 401 は `ApiClient` が refresh して 1 回だけ再送する。refresh 失敗は `ApiClient` のシグナル `session_expired`（`AppContext` が `EventBus` へ中継）で知らせる
 - 変更を伴う認証付き POST（login・consent）には `X-Unique-Request-Identifier`（冪等キー）を付ける。キーの寿命は「ひとつの操作」で、持つのは presenter（操作の呼び出し元）
 - API のベース URL と配信ホストは `ApiConfig` の 1 か所

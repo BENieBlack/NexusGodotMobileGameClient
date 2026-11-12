@@ -1,0 +1,4 @@
+# GDScript の lint（gdlint）と整形（gdformat）を提供する gdtoolkit。make setup-tools で .venv-tools に入れる。
+# 版を固定するのは、版が変わると lint / format の結果が変わり、CI とローカルで食い違うのを防ぐため。
+# 上げるときは make format で既存コードの整形差分が出ないことを確かめる
+gdtoolkit==4.5.0
