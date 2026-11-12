@@ -72,7 +72,8 @@ LAYERS = ("presentation", "domain", "data")
 # テスト用の最小プロジェクトなど、project.godot を用意しない場合でも A1 を検査できるようにする
 FIXED_AUTOLOADS = ("AppContext", "SceneRouter", "Toast", "EventBus")
 # 走査しないディレクトリ（アドオン・生成物・ツール自身。隠しディレクトリは collect_files で別に除く）
-SKIP_DIRS = {"addons", "node_modules", "reports", "tools"}
+# build/ は make release-project が作る製品用の複製。元のコードの写しなので、走査すると class_name が二重に見える
+SKIP_DIRS = {"addons", "node_modules", "reports", "tools", "build"}
 # 旧構成のトップディレクトリ。移行期間中だけ存在し、検査せず O1 の参照先としてだけ使う
 OLD_DIRS = ("scripts", "scenes")
 

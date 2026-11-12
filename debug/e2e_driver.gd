@@ -3,7 +3,11 @@
 ## 目的: 実サーバーに対して「タイトル → 認証 → login → 規約 → ログインボーナス → ホーム」の通しを、
 ##       人の操作なしで最後まで動かす（client_design.md 7 節）。動画撮影・通しの確認で使う。録画自体はしない。
 ## 通常起動への影響: 起動引数に `--e2e` 系が無ければ何もしない（_ready で処理を止める）。
-##       製品ビルドでは debug/ ごとエクスポートから除外し、project.godot の [autoload] の行も外す。
+## 製品ビルドへの混入防止（二重）:
+##   1. `make release-project` が debug/ を除いた製品用の複製を作り、その project.godot から
+##      この autoload の行も外す（元の project.godot は変えない）。
+##   2. 万一この処理が製品ビルドに混ざっても、debug ビルドでなければ（OS.is_debug_build() が偽）
+##      引数があっても無効にする（is_enabled）。
 ## 使い方: 引数は Godot の `--` の後ろに付ける（`--` の前でも読む）。
 ##   godot --path . -- --e2e-case=case1 --e2e-reset
 ##   godot --headless --path . -- --e2e-case=smoke --e2e-timeout=60
@@ -73,8 +77,8 @@ var _tokens_corrupted: bool = false
 
 func _ready() -> void:
 	_args = _parse_args()
-	if not (_args.has("e2e") or _args.has("e2e-case")):
-		# 通常起動: 何もしない（_process も止める）
+	if not is_enabled(_args, OS.is_debug_build()):
+		# 通常起動、または debug ビルドでない（製品ビルド）: 何もしない（_process も止める）
 		set_process(false)
 		return
 
@@ -215,6 +219,15 @@ func _click_at(viewport_position: Vector2) -> void:
 		await get_tree().process_frame
 	Input.parse_input_event(make_button(window_position, false))
 	_is_clicking = false
+
+
+## ドライバーを有効にするか。debug ビルドで、かつ --e2e か --e2e-case の引数があるときだけ真。
+## debug ビルドでないときは引数があっても偽（製品ビルドに混ざっても動かさない）。
+## OS.is_debug_build() を引数で受けるのは、テストで製品ビルドの場合を再現するため。
+static func is_enabled(args: Dictionary, is_debug_build: bool) -> bool:
+	if not is_debug_build:
+		return false
+	return args.has("e2e") or args.has("e2e-case")
 
 
 ## エラー表示（再試行ボタンが見えている状態）の経過秒を 1 フレーム進める。

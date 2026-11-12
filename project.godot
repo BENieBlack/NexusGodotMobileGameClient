@@ -19,7 +19,9 @@ config/icon="res://icon.svg"
 
 ; 順序が大事: EventBus（シグナルの置き場）→ AppContext（依存の組み立て。_ready で他のオートロードを呼ばない）
 ; → SceneRouter（画面遷移）→ Toast（通知。EventBus を購読する）→ E2EDriver（検証用。--e2e が無ければ何もしない）。
-; E2EDriver は debug/ にあり、製品ビルドではエクスポートから除外する（その場合はこの 1 行も外す）
+; E2EDriver は debug/ にある開発専用。製品ビルドは `make release-project` が作る複製から、debug/ と一緒にこの行も
+; 外す（元のこの project.godot は変えない）。Godot 4.7 は autoload のキーへの機能タグ（debug など）を
+; 条件として扱わず常に読み込むため、タグでの切り替えは使えない
 EventBus="*res://core/domain/event_bus.gd"
 AppContext="*res://app/app_context.gd"
 SceneRouter="*res://app/scene_router.gd"

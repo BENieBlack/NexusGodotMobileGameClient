@@ -227,7 +227,7 @@ func sign_in(_device_id: String) -> Result:
 
 ## 9. debug 用の置き場とツール
 
-- e2e ドライバー・`api_test` など開発専用のものは `debug/`（または `tests/e2e/`）に置き、**エクスポートから除外する**か、debug ビルドだけのオートロードにする。製品ビルドに入れない。現状、e2e ドライバー（`debug/e2e_driver.gd`）は `project.godot` の `[autoload]` の最後に `E2EDriver` として登録してあり、`--e2e` 系の引数が無ければ何もしない。製品ビルドでは `debug/` を除外するとともに、この 1 行も外す
+- e2e ドライバー・`api_test` など開発専用のものは `debug/`（または `tests/e2e/`）に置き、製品ビルドに入れない。現状、e2e ドライバー（`debug/e2e_driver.gd`）は `project.godot` の `[autoload]` の最後に `E2EDriver` として登録してあり、`--e2e` 系の引数が無ければ何もしない。Godot 4.7 は autoload への機能タグ（debug など）を条件として扱わないので、除外は「製品用の複製」で行う: `make release-project`（`tools/prepare_release_project.py`）が `debug/`・`tests/`・`addons/gdUnit4/`・開発用ファイルを除いた複製を `build/release-project` に作り、その `project.godot` から E2EDriver の autoload と gdUnit4 のプラグインを外す。元の `project.godot` は変えない。複製に除外先への参照や、複製に実在しない `res://` の参照が残っていれば終了コード 1。複製に含めるかは許可リスト方式で、リポジトリのトップレベルと `addons/` 直下は `tools/prepare_release_project.py` の `INCLUDE` / `EXCLUDE`（アドオンは `ADDONS_INCLUDE` / `ADDONS_EXCLUDE`）のどちらかに分類する。新しいトップレベルのディレクトリ・ファイル・アドオンを足したら、ここに分類する（忘れると未分類として `make check-release`（CI）が失敗する）。`make check-release` は複製をヘッドレスで起動し、ロードエラーが無く E2EDriver が動かないことを確かめる（`make check` に含まれる）。多重防御として、ドライバーは debug ビルドでなければ引数があっても無効
 - `tests/` と `debug/` は `app/` の参照を許す（e2e は AppContext を通して動かす）。ただし `contexts/` と `core/` からは参照しない
 
 ツール（導入済み。コマンドは [CLAUDE.md](../CLAUDE.md) のコマンド表）:

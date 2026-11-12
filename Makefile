@@ -3,7 +3,8 @@
 # 検査の流れ（make check = CI と同じ。順に実行し、1 つでも失敗したらそこで止まる）:
 #   check-deps（依存方向チェックと、その単体テスト）
 #     → lint（gdlint）→ format-check（gdformat --check）→ test（GdUnit4）
-# *-quiet 系（check-quiet / test-quiet）は同じ検査で、画面には結果だけを出す。全文は .make-logs/ に残る。
+#     → check-release（製品用の複製を作り、ヘッドレスで起動して確かめる）
+# *-quiet 系（check-quiet / test-quiet / check-release-quiet）は同じ検査で、画面には結果だけを出す。全文は .make-logs/ に残る。
 #
 # 前提:
 #   - 初回は `make setup-tools`（lint / format 用の Python 環境 .venv-tools を作り、GdUnit4 を固定した版で addons/ に入れる。
@@ -11,7 +12,7 @@
 #   - Godot は PATH 上の godot。別の場所なら `GODOT_BIN=/path/to/godot make ...`
 #   - lint / format-check / format は .venv-tools が無いと失敗する（setup-tools を先に）
 
-.PHONY: help setup-tools setup-gdunit4 check-deps lint format-check format import test test-quiet check check-quiet clean-reports
+.PHONY: help setup-tools setup-gdunit4 check-deps lint format-check format import test test-quiet check check-quiet clean-reports release-project check-release check-release-quiet
 
 # Godot 本体。環境変数 GODOT_BIN で上書きできる（GdUnit4 の runtest.sh と同じ変数名）。
 # 未指定なら PATH 上の godot を使う。
@@ -112,8 +113,37 @@ test-quiet: setup-gdunit4 clean-reports ## GdUnit4 の全テスト。結果だ�
 		grep -E 'Overall Summary' $(QUIET_LOG_DIR)/test.log; echo "全文: $(QUIET_LOG_DIR)/test.log"; \
 	else tail -n 80 $(QUIET_LOG_DIR)/test.log; echo "NG test（終了コード $${status}。全文: $(QUIET_LOG_DIR)/test.log）"; exit 1; fi
 
+# 製品ビルド用のプロジェクトの複製。debug/・tests/・gdUnit4・開発用ファイルを除き、複製の project.godot から
+# E2EDriver の autoload と gdUnit4 のプラグインを外す。元の project.godot は変えない。
+# 出力先は RELEASE_DIR（build/ 配下。tools/prepare_release_project.py が build/ 以外の出力先を拒否する）。
+# 書き出しはこの複製を Godot で開いて行う（CLAUDE.md の「製品ビルド（書き出し）の手順」）
+RELEASE_DIR := build/release-project
+RELEASE_LOG := $(QUIET_LOG_DIR)/release-run.log
+
+release-project: ## 製品ビルド用の複製（build/release-project）を作る
+	$(PYTHON) tools/prepare_release_project.py --root . --out $(RELEASE_DIR)
+
+# 製品用の複製をヘッドレスで起動し、次を確かめる（どれかが崩れたら失敗）:
+#   (a) 初回のインポートが成功する
+#   (b) `--e2e-case=probe` を付けて起動し、終了コード 0 で、出力に ERROR（SCRIPT ERROR・autoload のロード失敗を含む）が無い。
+#       これは「debug/ を除いたのに autoload の行が残る」誤りの検出
+#   (c) 出力に `E2E: ドライバー有効` が無い。複製にはドライバーが無いので、--e2e の引数があっても何も起きない
+# --quit-after 60: 60 フレームで終了する。ログは $(RELEASE_LOG)
+check-release: release-project ## 製品用の複製をヘッドレスで起動して確かめる
+	@mkdir -p $(QUIET_LOG_DIR)
+	$(GODOT_BIN) --headless --path $(RELEASE_DIR) --import
+	@$(GODOT_BIN) --headless --path $(RELEASE_DIR) --quit-after 60 -- --e2e-case=probe > $(RELEASE_LOG) 2>&1; status=$$?; \
+	cat $(RELEASE_LOG); \
+	if [ $$status -ne 0 ]; then echo "NG check-release: 終了コード $$status"; exit 1; fi; \
+	if grep -q 'ERROR' $(RELEASE_LOG); then echo "NG check-release: 出力に ERROR があります"; exit 1; fi; \
+	if grep -q 'E2E: ドライバー有効' $(RELEASE_LOG); then echo "NG check-release: 製品用の複製で E2EDriver が動きました"; exit 1; fi; \
+	echo "OK check-release: 複製は起動し、E2EDriver は動きません"
+
+check-release-quiet: ## check-release。結果だけ表示（エージェント向け）
+	$(call run_quiet,check-release,$(MAKE) --no-print-directory check-release)
+
 # CI と同じ検査をローカルで回す。依存の並び順がそのまま実行順（make は左から順に実行し、失敗で止まる）
-check: check-deps lint format-check test ## CI と同じ検査（依存方向 → lint → format → テスト）
+check: check-deps lint format-check test check-release ## CI と同じ検査（依存方向 → lint → format → テスト → 製品用の複製の起動）
 
 # 実行順は check と同じ。各段のログは .make-logs/<段>.log。どの段で落ちたかは "NG <段>" で分かる
 check-quiet: ## check と同じ検査。結果だけを表示（エージェント向け）
@@ -122,3 +152,4 @@ check-quiet: ## check と同じ検査。結果だけを表示（エージェン�
 	$(call run_quiet,lint,$(VENV)/bin/gdlint $(SRC_DIRS))
 	$(call run_quiet,format-check,$(VENV)/bin/gdformat --check $(SRC_DIRS))
 	@$(MAKE) --no-print-directory test-quiet
+	@$(MAKE) --no-print-directory check-release-quiet

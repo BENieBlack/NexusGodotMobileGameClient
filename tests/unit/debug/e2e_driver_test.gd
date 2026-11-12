@@ -57,3 +57,18 @@ func test_next_error_time_restarts_for_each_error() -> void:
 	t = driver.next_error_time(t, false, 0.5)
 	assert_float(t).is_equal(-1.0)
 	assert_float(driver.next_error_time(t, true, 0.5)).is_equal(0.0)
+
+
+## 前提: --e2e-case 付きの引数。操作: debug ビルドか否かで判定。
+## 期待: debug ビルドでは有効、製品ビルド（debug でない）では引数があっても無効（混入しても動かない）。
+func test_is_enabled_only_in_debug_build() -> void:
+	var args := {"e2e-case": "probe"}
+	assert_bool(load(DRIVER).is_enabled(args, true)).is_true()
+	assert_bool(load(DRIVER).is_enabled(args, false)).is_false()
+	assert_bool(load(DRIVER).is_enabled({"e2e": true}, true)).is_true()
+
+
+## 前提: --e2e 系でない引数（--e2e-reset だけ）か、引数なし。期待: debug ビルドでも無効（通常起動は何もしない）。
+func test_is_enabled_requires_e2e_argument() -> void:
+	assert_bool(load(DRIVER).is_enabled({}, true)).is_false()
+	assert_bool(load(DRIVER).is_enabled({"e2e-reset": true}, true)).is_false()

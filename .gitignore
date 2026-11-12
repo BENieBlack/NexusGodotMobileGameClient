@@ -11,3 +11,6 @@ __pycache__/
 
 # サードパーティのテスト基盤。tools/install_gdunit4.sh が版を固定して入れる（git には入れない）
 /addons/gdUnit4/
+
+# make release-project が作る製品ビルド用の複製
+/build/

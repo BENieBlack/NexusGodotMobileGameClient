@@ -23,7 +23,18 @@
 | 初回の準備（GdUnit4 と lint 用の Python 環境） | `make setup-tools`（GdUnit4 は git に入れず、`tools/install_gdunit4.sh` が版と SHA を固定して `addons/gdUnit4/` に入れる） |
 | テスト（GdUnit4、ヘッドレス） | `make test`（結果だけ: `make test-quiet`）。結果の XML は `reports/` |
 | lint / 整形 | `make lint` / `make format-check` / `make format`（新構成のディレクトリだけ） |
+| 製品ビルド用の複製（debug/・tests/・gdUnit4 と E2EDriver の autoload を除く） | `make release-project`（出力: `build/release-project`）。複製の起動検査は `make check-release`（結果だけ: `make check-release-quiet`。`make check` に含む） |
 | 一部だけ | `GODOT_BIN=godot` を付けて `godot --headless --path . -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd --add res://tests/unit/xxx_test.gd --ignoreHeadlessMode` |
+
+## 製品ビルド（書き出し）の手順
+
+1. `make release-project` で `build/release-project` を作る（開発専用のものと E2EDriver の autoload を除いた複製。元のリポジトリは変えない）
+2. 生成された `build/release-project` を Godot で開き、そこで書き出す。`export_presets.cfg` は複製の中に置く（元のリポジトリに置いてあれば、複製に自動でコピーされる）
+3. 書き出しテンプレートと export_presets.cfg は別途用意が要る（リポジトリには無い）
+
+新しいトップレベルのディレクトリ・ファイル・アドオンを足したら、`tools/prepare_release_project.py` の `INCLUDE` / `EXCLUDE`（アドオンは `ADDONS_INCLUDE` / `ADDONS_EXCLUDE`）に分類する。忘れると `make check-release`（CI）が失敗する。製品コードが複製に無いもの（`INCLUDE` に無いディレクトリなど）を `res://` で参照している場合も同じく失敗する。
+
+未確認: 実際の書き出し（テンプレートと presets が手元に無いため）。確かめたのは、複製のヘッドレス起動（`make check-release`）まで。
 
 ## 規約（実装前に読む）
 
