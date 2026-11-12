@@ -30,12 +30,17 @@ func _init(auth_repository: AuthRepository, token_store: ApiAuthProvider) -> voi
 	_token_store = token_store
 
 
+## 新規の端末か（保存トークンが無く、最初に sign_up を呼ぶか）。
+## タイトルが「新規登録中...」と「ログイン中...」を出し分けるために、handle の前に呼ぶ。
+func is_new_user() -> bool:
+	return not _has_token()
+
+
 ## 認証する。呼び出し側は await する。
 func handle() -> Result:
 	# --- 1. 最初に呼ぶ API を決める ---
 	# 保存トークンの有無で決める（要件どおり）。refresh_token が残っていれば既存端末とみなす
-	var has_token := _token_store.refresh_token() != "" or _token_store.access_token() != ""
-	var first_is_sign_in := has_token
+	var first_is_sign_in := _has_token()
 	var result := await _call(first_is_sign_in)
 
 	# --- 2. 食い違いのときだけ、もう一方へ 1 回切り替える ---
@@ -61,3 +66,8 @@ func _call(use_sign_in: bool) -> AuthSessionResult:
 	if use_sign_in:
 		return await _auth_repository.sign_in()
 	return await _auth_repository.sign_up()
+
+
+## 保存トークンがあるか（refresh_token かアクセストークンのどちらかが残っていれば既存端末）。
+func _has_token() -> bool:
+	return _token_store.refresh_token() != "" or _token_store.access_token() != ""

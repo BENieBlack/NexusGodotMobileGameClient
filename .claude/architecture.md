@@ -197,51 +197,44 @@ func sign_in(_device_id: String) -> Result:
 - 契約・結果の型は、他の層の `class_name` を `preload` せず**型注釈**で参照する。`preload` どうしの循環を作らない（依存チェックで `preload` の循環も検出する）
 - ファイルの移動・改名: Godot 4.4 以降（本プロジェクトは 4.7）は `.gd` の隣に `.gd.uid` がある。**`git mv` で `.gd` と `.gd.uid` を一緒に動かす**。エディタ外で動かしたら、`[autoload]`・`preload`・`load` のパス文字列を grep で直す（`.tscn` の `ext_resource` は uid で解決される）
 
-## 8. 移行方針
+## 8. 移行（完了）
 
-現行コードは約 3,100 行 / 25 ファイル（`scenes/` と `scripts/` の `.gd`。`wc -l` で数えた）。
+旧構成（`scenes/` と `scripts/` の managers / services / models / repositories / tests）から新構成への移行は、タイトル〜ホームの機能（`docs/design/title-to-home/client_design.md`）で完了した。**旧構成は削除済み**で、`scenes/` と `scripts/` は存在しない。旧オートロード（`UserDataManager` / `SceneManager` / `AuthService` / `MasterDataManager` / `ToastManager`）も廃止した。
 
-既存ファイルは**機能単位**で新構成へ移す。ファイルを 1 つずつ先に動かさず、機能（例: タイトル〜ホーム）を実装するときに、触るファイルを新構成へ移す。
+### 旧構成からの行き先（記録）
 
-### 既存ファイルの行き先
-
-| 現在 | 行き先 |
+| 旧 | 新 |
 | --- | --- |
 | `scripts/services/api_client.gd` / `api_result.gd` | `core/data/http/` |
 | `scripts/config/api_config.gd` | `core/data/config/` |
 | `scripts/utils/json_reader.gd` | `core/domain/json_reader.gd` |
-| `scripts/services/auth_service.gd` | `contexts/auth/domain/use_cases/`（`authenticate_use_case.gd`）と `data/`（`repositories/auth_api_repository.gd`、`api/` の署名・応答の型）に分解 |
-| `scripts/managers/user_data_manager.gd` | トークンは `contexts/auth/data/`（`repositories/local_auth_token_repository.gd`）、所持データは `contexts/player/`、ログインボーナスは `contexts/login/` に分解 |
-| `scripts/managers/master_data_manager.gd` / `scripts/repositories/mst_*` / `scripts/models/mst/*` | `master_data/`（`domain/` に同期 UseCase・契約・読み取りモデル、`data/` に SQLite・ダウンロード・Repository 実装。`contexts/` の下ではない） |
-| `scripts/models/sys/*`・`trx/*` | `auth`・`agreement`・`player` の `domain/entities/` |
-| `scenes/title/` | `contexts/auth/presentation/title/` |
-| `scenes/agreement/` | `contexts/agreement/presentation/agreement/` |
-| `scenes/login_bonus/` | `contexts/login/presentation/login_bonus/` |
-| `scenes/home/` | `contexts/player/presentation/home/` |
-| `scenes/api_test/` | debug 専用の置き場（`debug/`。エクスポート除外） |
-| `scripts/managers/scene_manager.gd` | `app/scene_router.gd`（`class_name` なし） |
-| `scripts/managers/toast_manager.gd` | `core/presentation/` |
+| `scripts/services/auth_service.gd` | `contexts/auth/domain/use_cases/authenticate_use_case.gd` と `data/`（`repositories/auth_api_repository.gd`、`api/` の署名） |
+| `scripts/managers/user_data_manager.gd` | トークンは `contexts/auth/data/repositories/local_auth_token_repository.gd`、所持データは `contexts/player/`、ログインボーナスは `contexts/login/` |
+| `scripts/managers/master_data_manager.gd` / `scripts/repositories/mst_*` / `scripts/models/mst/*` | `master_data/`（`Mst*` の読み取りモデルと Repository、同期 UseCase） |
+| `scripts/models/sys/*`・`trx/*` | `agreement` の `SysAgreement`、`player` の `PlayerState`（trx 一覧は Dictionary のまま保持）。使われなくなった旧モデルは削除 |
+| `scenes/title/` `agreement/` `login_bonus/` `home/` | `contexts/{auth,agreement,login,player}/presentation/<画面>/`（`*.tscn` と `*_presenter.gd`） |
+| `scenes/api_test/` | `debug/api_test/`（エクスポート除外） |
+| `scripts/managers/scene_manager.gd` | `app/scene_router.gd` |
+| `scripts/managers/toast_manager.gd` | `core/presentation/toast.gd` |
 | `scripts/tests/*` | `tests/unit/`（`core/` と `contexts/` をミラー） |
 
-### 旧構成と新構成が混在する期間のルール
+### これからのルール
 
-- 移行する機能の単位は**コンテキスト**（core と `master_data/` も 1 単位）。コンテキストの一部だけ移した状態を残さない。**例外: 最初の移行は core・`master_data/` と関係するコンテキストを一括で行う**（`ApiClient` がトークンと `master_hash` の契約を要するため、core だけ・auth だけでは成立しない）
-- 新構成のコードは旧構成（`scripts/` と `scenes/`）を参照しない。旧が新を呼ぶのは、移行中の窓口（旧ファイルから新しい UseCase を呼ぶ薄い転送）としてのみ許す。転送には `# 移行用` と書き、機能の移行完了で削除する
-- 旧オートロード（`UserDataManager` など）が状態を持つ間は、新構成の Repository が同じ値を読み書きする形にせず、**状態の持ち主を 1 つにする**。持ち主を新構成の Repository に移した時点で、旧オートロードは削除する。旧オートロード（`UserDataManager`）が残る間は、旧側も `EventBus.session_expired` を受ける移行用転送を置く（新 `ApiClient` の refresh 失敗で旧状態も空にするため）
-- 旧構成のファイルへの新規の機能追加はしない（バグ修正のみ）
-- ファイルを動かす PR は、動作を変えない移動だけの PR と、機能変更の PR を分ける。`.uid` と参照の切れを確認する
-- 新しい機能は、最初から新構成で書く
+- 新しい機能は最初から新構成で書く。`scenes/` や `scripts/` を作り直さない
+- 依存チェックは、新構成のコードが旧構成のパス（`scripts/` `scenes/`）を参照する（O1）のを検出する。旧構成のディレクトリは無いので、通常は何も出ない（再び置かれても検査対象外としてスキップされるだけで、新構成から参照すれば O1 で落ちる）
+- ファイルを動かす・改名するときは、`.gd` と `.gd.uid` を `git mv` で一緒に動かす（7 節）。動作を変えない移動だけの PR と、機能変更の PR は分ける
+- 状態をオートロードに持たせない。持ち主は各コンテキストの Repository 1 つ（2 節）
 
 ## 9. debug 用の置き場とツール
 
-- e2e ドライバー・`api_test` など開発専用のものは `debug/`（または `tests/e2e/`）に置き、**エクスポートから除外する**か、debug ビルドだけのオートロードにする。製品ビルドに入れない
+- e2e ドライバー・`api_test` など開発専用のものは `debug/`（または `tests/e2e/`）に置き、**エクスポートから除外する**か、debug ビルドだけのオートロードにする。製品ビルドに入れない。現状、e2e ドライバー（`debug/e2e_driver.gd`）は `project.godot` の `[autoload]` の最後に `E2EDriver` として登録してあり、`--e2e` 系の引数が無ければ何もしない。製品ビルドでは `debug/` を除外するとともに、この 1 行も外す
 - `tests/` と `debug/` は `app/` の参照を許す（e2e は AppContext を通して動かす）。ただし `contexts/` と `core/` からは参照しない
 
 ツール（導入済み。コマンドは [CLAUDE.md](../CLAUDE.md) のコマンド表）:
 
 | 種類 | 内容 | 実行 |
 | --- | --- | --- |
-| 依存方向チェック | `tools/check_dependencies.py`（Python 標準ライブラリのみ）。`app/ core/ master_data/ contexts/ tests/ debug/` の `*.gd` を対象に、`preload` / `load` / `extends` の `res://` パス、`class_name` の使用、`[autoload]` 名の参照を読み、違反を `パス:行: [ID] 内容` で出して終了コード 1 にする。旧構成（`scripts/` `scenes/`）は検査せずスキップ数を表示する。抑止コメントは用意しない。単体テストは `tools/tests/` | `make check-deps` |
+| 依存方向チェック | `tools/check_dependencies.py`（Python 標準ライブラリのみ）。`app/ core/ master_data/ contexts/ tests/ debug/` の `*.gd` を対象に、`preload` / `load` / `extends` の `res://` パス、`class_name` の使用、`[autoload]` 名の参照を読み、違反を `パス:行: [ID] 内容` で出して終了コード 1 にする。旧構成（`scripts/` `scenes/`）は削除済み。万一残っていても検査せず、スキップ数を表示する。抑止コメントは用意しない。単体テストは `tools/tests/` | `make check-deps` |
 | gdlint / gdformat | gdtoolkit 4.5.0（`tools/requirements.txt`、`.venv-tools/` に入れる）。設定は `.gdlintrc`（命名は 6 節と coding-standards.md のとおり snake_case / PascalCase）。対象は新構成のディレクトリだけ | `make lint` / `make format-check` / `make format` |
 | テスト | **GdUnit4**（v6.2.3。`addons/gdUnit4/` は git に入れず、`tools/install_gdunit4.sh` が版とコミット SHA を固定して取得する。`make setup-tools` / `make test` が自動で呼ぶ）。Godot 4.7 に対応し、CLI でヘッドレス実行と JUnit XML 出力ができるため採用。`tests/` に `contexts/` `master_data/` `core/` をミラーして置く。domain と UseCase は Repository の偽実装で単体テストを書く。結果は `reports/`（git 管理外） | `make test` / `make test-quiet` |
 
@@ -263,20 +256,20 @@ func sign_in(_device_id: String) -> Result:
 | N1 | 命名: `*_use_case.gd` は `domain/use_cases/`、`*_presenter.gd` は `presentation/`、`*_api_repository.gd` / `local_*_repository.gd` は `data/repositories/`、`*_response.gd` は `data/api/` にだけ置く。`class_name` はファイル名のパスカルケース（オートロード除く） |
 | Y1 | `preload` / `extends` のパスの循環 |
 | S1 | `core/` `master_data/` `contexts/<ctx>/` のファイルは presentation / domain / data のいずれかの下に置く |
-| O1 | 新構成のコードは旧構成（`scripts/` `scenes/`）を参照しない（8 節） |
+| O1 | 新構成のコードは旧構成（`scripts/` `scenes/`）を参照しない（旧構成は削除済み。戻さないための検査。8 節） |
 | T1 | 本番コード（app / core / master_data / contexts）は `tests/` `debug/` を参照しない |
 
 `app/`・`tests/`・`debug/` は参照の制限を受けない（`tests/` `debug/` は D2 以外の層の規則も対象外）。
 
 ## 10. 画面の流れ
 
-| 画面 | シーン（移行後） | 説明 |
+| 画面 | シーン | 説明 |
 | --- | --- | --- |
 | タイトル | `contexts/auth/presentation/title/title.tscn` | version 確認 → 認証 → login |
 | 規約 | `contexts/agreement/presentation/agreement/agreement.tscn` | 未同意の規約があるときだけ表示。同意を送る |
 | ログインボーナス | `contexts/login/presentation/login_bonus/login_bonus.tscn` | login の結果を表示する（通信しない） |
 | ホーム | `contexts/player/presentation/home/home.tscn` | メインメニュー |
-| API テスト | `tests/e2e/` か debug 専用 | デバッグ用 |
+| API テスト | `debug/api_test/api_test.tscn` | デバッグ用（タイトル・ホームからは開けない。直接開く） |
 
 遷移: タイトル → 規約 → ログインボーナス → ホーム。login が成功するまで先へ進まない（詳細は `docs/design/title-to-home/client_design.md`）。
 

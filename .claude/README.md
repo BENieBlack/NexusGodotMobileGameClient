@@ -14,11 +14,11 @@
 - **Godot 4**: GDScriptによる実装
 - **デバイスIDベース認証**: HMAC-SHA256署名付きサインアップ、サインイン
 - **自動トークンリフレッシュ**: アクセストークン期限切れ時に自動更新
-- **レイヤード構成**: scenes / scripts(services, managers, models, repositories) の分離
+- **クリーンアーキテクチャ（軽量 DDD）**: presentation / domain / data の 3 層とコンテキスト分割。依存方向は `make check-deps` で検査
 
 ## ディレクトリ構成
 
-クリーンアーキテクチャ（presentation / domain / data の 3 層）+ 軽量 DDD。詳細は [architecture.md](./architecture.md)。下は移行後の構成で、既存ファイルは機能単位で順に移す（行き先は architecture.md 8 節）。
+クリーンアーキテクチャ（presentation / domain / data の 3 層）+ 軽量 DDD。詳細は [architecture.md](./architecture.md)。旧構成（`scenes/` と `scripts/`）は削除済みで、すべてこの構成にある。
 
 ```
 NexusGodotMobileGameClient/
@@ -28,7 +28,7 @@ NexusGodotMobileGameClient/
 ├── core/                      # 共有カーネル
 │   ├── domain/                #   Result, AppError, EventBus, JsonReader
 │   ├── data/                  #   http/（ApiClient・ApiResult）, config/（ApiConfig）, storage/
-│   └── presentation/          #   Toast, ローディング, エラーダイアログ
+│   └── presentation/          #   Toast（オートロード）, エラー文言（ErrorMessages）, エラー表示（ErrorView）
 ├── master_data/               # 読み取り専用の参照データ（コンテキストに属さない共有モジュール）
 │   ├── domain/                #   mst の読み取りモデル、契約、同期 UseCase（バージョン確認・更新判定）
 │   └── data/                  #   SQLite、差分ダウンロード、ハッシュ管理、mst Repository、version API
@@ -39,14 +39,15 @@ NexusGodotMobileGameClient/
 │   ├── player/                #   プレイヤー・所持データ、ホーム画面
 │   │   └── {presentation, domain(entities, use_cases, repositories), data(api, local, repositories)}
 │   └── （今後: gacha / unit / equipment …）
-├── tests/                     # core/・master_data/・contexts/ をミラー（unit / integration / e2e）
+├── tests/                     # core/・master_data/・contexts/ をミラー（GdUnit4。unit / integration）
+├── debug/                     # 開発専用（エクスポート除外）: e2e_driver.gd, api_test/, verify_*.gd
 ├── assets/                    # アセット
 ├── addons/                    # Godotアドオン
 ├── data/                      # ローカルデータ（SQLiteなど）
 └── docs/                      # ドキュメント（design/<機能>/client_design.md）
 ```
 
-> 現在は移行前で、`scenes/` と `scripts/`（managers / services / models / repositories）の旧構成が残っている。
+> 旧構成（`scenes/` と `scripts/`）は 2026-11-12 に削除済み（移行完了。architecture.md 8 節）。
 
 ## ドキュメント構成
 
@@ -71,31 +72,43 @@ NexusGodotMobileGameClient/
 ```
 アプリ起動
   ↓
-タイトル画面
-  ↓ 新規ユーザー: POST /api/auth/sign_up (HMAC-SHA256署名付き)
-  ↓ 既存ユーザー: POST /api/auth/sign_in
-  ↓ access_token / refresh_token 取得・保存
+タイトル画面（段階を直列に進める。失敗した段階から再試行できる）
+  ↓ 1. GET /api/auth/version → マスターデータの差分更新（失敗しても保存済みのデータで続行し、通知する）
+  ↓ 2. 新規ユーザー: POST /api/auth/sign_up (HMAC-SHA256署名付き)
+  ↓    既存ユーザー: POST /api/auth/sign_in（10002 → sign_up、10004 → sign_in に 1 回だけ切り替える）
+  ↓    access_token / refresh_token 取得・保存
+  ↓ 3. POST /api/auth/login (Bearer認証・冪等キー付き)
+  ↓    sys_player・trx 一覧 6 種（unit / item / wallet / diamond / equipment / stamina）・login_bonus_list を取得
+  ↓    login が成功するまで先へ進まない（失敗はタイトル上のエラー表示と「再試行」）
   ↓
-POST /api/auth/login (Bearer認証)
-  ↓ sys_player / trx_unit_list / trx_item_list / trx_wallet_list / login_bonus_list 取得
+規約画面（GET /api/agreement/pending。未同意が無ければ見えない。同意は POST /api/agreement/consent）
   ↓
-ログインボーナス画面 → ホーム画面
+ログインボーナス画面（通信しない）→ ホーム画面
 ```
+
+規約画面でセッションが無効になった（refresh 失敗）ときは、タイトルへ戻って認証からやり直す。
 
 ### トークン管理
 
 - **アクセストークン**: メモリ + ローカルファイル保存、有効期限1時間
 - **リフレッシュトークン**: メモリ + ローカルファイル保存、有効期限30日
-- **自動リフレッシュ**: `api_client.gd` が HTTP 401 を検知して `POST /api/auth/refresh_token` を自動呼び出し
+- **自動リフレッシュ**: `core/data/http/api_client.gd` が HTTP 401 を検知して `POST /api/auth/refresh_token` を自動呼び出し（1 本にまとめ、同じリクエストを 1 回だけ再送）。保存は `contexts/auth/data/repositories/local_auth_token_repository.gd`
 
 ### エラーハンドリング
 
-| HTTPステータス | 意味 | 対応 |
-|---------------|------|------|
-| 200 | 成功 | 正常処理 |
-| 299 | ビジネスロジックエラー | `business_error` シグナルで通知 |
-| 401 | 認証エラー（トークン期限切れ） | 自動リフレッシュ → 再送 |
-| 503 | メンテナンス中 | メンテナンス画面表示（未実装） |
+`ApiClient` が HTTP ステータスで分類し、`AppError.kind` として上位へ渡す。表示文言は `core/presentation/error_messages.gd`（設計は client_design.md 1-3）。
+
+| HTTPステータス | `AppError.Kind` | 対応 |
+|---------------|-----------------|------|
+| 通信失敗 | `NETWORK` | 「通信できませんでした」+ 再試行 |
+| 200 | - | 正常処理 |
+| 299 | `BUSINESS` | 「エラーが発生しました (コード: N)」+ 再試行（冪等キーは作り直す）。10002・10004・24001・24002 は画面に出さず UseCase が処理 |
+| 401 | `SESSION_EXPIRED` ほか | 自動リフレッシュ → 再送。失敗でセッション破棄 → タイトルから再開。sign_up の 401 は署名不正（`SIGNATURE`） |
+| 409 | `CONFLICT` | 「処理中です」+ 再試行（同じ冪等キー） |
+| 422 | `VALIDATION` | 汎用エラー + 再試行 |
+| 429 | `RATE_LIMITED` | `retry_after` 秒の間は再試行ボタンを無効にする |
+| 503 | `MAINTENANCE` / `SERVER_BUSY` | メンテナンスはサーバーの title / message / end_at を表示。`error_code` 50300 は「しばらくしてから」 |
+| その他の非 2xx / JSON 不正 | `SERVER_ERROR` / `PARSE` | 汎用エラー + 再試行 |
 
 ## クイックスタート
 
@@ -105,25 +118,44 @@ Godot 4 でこのディレクトリを開いてください。
 
 ### 2. サーバを起動
 
-`NexusLaravelMobileGameServer` を起動してください（デフォルト: `http://localhost:8080`）。
+`NexusLaravelMobileGameServer` を起動してください（サーバー側で `make up`。API は `http://localhost:8090/api`、マスターデータの配信は `http://localhost:8091`）。
 
 ### 3. エンドポイント設定
 
-`scripts/services/auth_service.gd` と `scripts/services/api_client.gd` の `BASE_URL` 定数を環境に合わせて変更してください。
+接続先は `core/data/config/api_config.gd`（`ApiConfig`）が 1 か所で決めます。コードを書き換えず、次のどちらかで変えます（上が優先）。
+
+1. 環境変数 `NEXUS_API_BASE_URL` / `NEXUS_MASTER_BASE_URL`
+2. `project.godot` の `[nexus]` セクション（`api_base_url` / `master_base_url`）
+
+### 4. 通しの動作確認（e2e ドライバー）
+
+人の操作なしで「タイトル → 認証 → login → 規約 → ログインボーナス → ホーム」を最後まで動かせます（`debug/e2e_driver.gd`。`--e2e` 系の引数が無ければ何もしません）。
+
+```bash
+godot --path . -- --e2e-case=smoke --e2e-reset            # 新規ユーザー（トークンと device_id を消す）
+godot --path . -- --e2e-case=smoke --e2e-fail-login=503 --e2e-no-retry   # login だけメンテナンスにして、エラー表示で止める
+```
+
+引数の一覧は `debug/e2e_driver.gd` の冒頭。sign_up は IP あたり 10 回/時間の上限があるので、`--e2e-reset` を繰り返さない。ボタンのクリックはヘッドレス（`--headless`）では効かないので、再試行ボタンの操作を含むケースは通常起動で動かす。
 
 ## 重要な設計原則
 
 ### 1. シーンとロジックの分離
 
 - シーン（`.tscn`）はUI構造のみ
-- シーンロジック（`.gd`）はUI制御とシグナル接続のみ
-- ビジネスロジックは `scripts/services/` または `scripts/managers/` に実装
+- presenter（`*_presenter.gd`）はUI制御とシグナル接続のみ。UseCase だけを呼び、API・保存を直接呼ばない
+- 業務の流れは `contexts/<名前>/domain/use_cases/`、通信・保存は `data/` に実装（層の依存方向は architecture.md 2 節）
 
 ### 2. グローバルマネージャー（オートロード）
 
-- `UserDataManager`: 認証状態・ゲームデータのシングルトン
-- `SceneManager`: シーン遷移のシングルトン
-- `MasterDataManager`: マスターデータのシングルトン
+オートロードは最小に保つ（順序はこのとおり。architecture.md 2 節）。状態はオートロードに置かず、各コンテキストの Repository が持つ。
+
+- `EventBus`: コンテキスト間のシグナル（`session_expired` / `master_update_required`）
+- `AppContext`: 依存の組み立て。presenter は `AppContext.login_use_case()` のように UseCase を受け取る
+- `SceneRouter`: 画面遷移（`SceneRouter.goto_home()` など）
+- `Toast`: トースト表示と、リアルタイム通知（Reverb）への接続
+
+開発専用に `E2EDriver`（`debug/`）が最後に登録されている（製品ビルドでは外す）。
 
 ### 3. サーバAPIのレスポンス形式
 
@@ -144,10 +176,14 @@ Godot 4 でこのディレクトリを開いてください。
   "trx_unit_list": [...],
   "trx_item_list": [...],
   "trx_wallet_list": [...],
+  "trx_diamond_list": [...],
+  "trx_equipment_list": [...],
+  "trx_stamina_list": [...],
   "login_bonus_list": [
     { "unique_id": "...", "type": "gold", "id": "gold", "amount": 100, "expire_at": null, "metadata": null }
   ]
 }
+// 項目の詳細はサーバーの docs/design/title-to-home/api.md（正）。一覧の要素は Dictionary のまま保持する
 ```
 
 ## 更新履歴
@@ -155,3 +191,4 @@ Godot 4 でこのディレクトリを開いてください。
 | 日付 | バージョン | 変更内容 |
 |------|-----------|---------|
 | 2026-09-02 | 0.1.0 | 初期ドキュメント作成 |
+| 2026-11-12 | 0.2.0 | タイトル〜ホームの新構成への移行完了に合わせ、概要・構成・通信フロー・エラー・クイックスタート・オートロードを更新 |

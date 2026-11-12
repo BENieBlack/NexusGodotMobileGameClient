@@ -20,8 +20,8 @@ Server（Laravelツール）                    Client（Godot）
 │   ...                   │               │   ...                    │
 └─────────────────────────┘               └──────────────────────────┘
          ↓ エクスポート                              ↓ 結合して参照
-  テーブルごとに SQLite 生成                   MasterDataManager が
-  SHA-256 ハッシュをファイル名に付与            全テーブルを統合して提供
+  テーブルごとに SQLite 生成                   master_data/ が全テーブルを
+  SHA-256 ハッシュをファイル名に付与            開いて提供（MasterDatabase）
 ```
 
 #### テーブル単位で分割する理由
@@ -52,58 +52,54 @@ mst_{テーブル名}_{SHA-256ハッシュ}.sqlite
   mst_gacha_2d5f8c90...sqlite
 ```
 
-ハッシュが変わる = テーブルの内容が変わった、という意味になる。
+ハッシュが変わる = テーブルの内容が変わった、という意味になる。配信 URL は `/masterdata/<hash>/<ファイル名>`（ハッシュ名のディレクトリの下。version API の `url`）。
 
 ### auth/version APIとの連携
 
+クライアントの実装は共有モジュール `master_data/`（`contexts/` と同階層。設計は `docs/design/title-to-home/client_design.md` 5 節）。呼び出し元はタイトル画面の最初の段階（認証の前）で、`master_data/domain/use_cases/check_master_data_use_case.gd`。
+
 ```
-POST /api/auth/version
-{ "deploy_version": <現在持っているsys_deploy.id> }
+GET /api/auth/version?deploy_version=<現在持っているsys_deploy.id>
+（認証不要・メンテナンス中も通る。X-Master-Hash があれば付ける）
 
 レスポンス（更新あり）:
 {
   "needs_update": true,
   "sys_deploy_id": 5,
-  "latest_deploy_key": 2026090501,
   "master": {
-    "sys_deploy_master_id": 4,
     "tables": {
-      "mst_item":  { "hash": "a3f8c1d2...", "url": "/masterdata/mst_item_a3f8c1d2....sqlite" },
-      "mst_unit":  { "hash": "7b9e4a11...", "url": "/masterdata/mst_unit_7b9e4a11....sqlite" },
-      "mst_gacha": { "hash": "2d5f8c90...", "url": "/masterdata/mst_gacha_2d5f8c90....sqlite" }
+      "mst_item":  { "hash": "a3f8c1d2...", "url": "/masterdata/<hash>/<file>" },
+      ...
     }
   }
 }
 ```
 
+項目の正はサーバーの `docs/design/title-to-home/api.md`。`url` は `/` 始まりなら配信ホスト（`ApiConfig.master_base_url()`。既定 `http://localhost:8091`。ADR 0001）を前置し、`http` 始まりの絶対 URL ならそのまま使う。
+
 クライアントの処理フロー：
 ```
-1. auth/version を叩く
-2. needs_update: false → そのまま起動
+1. GET /auth/version を呼ぶ（失敗したら FAILED。止めずに続行して通知する）
+2. needs_update: false → UP_TO_DATE（そのまま起動）
 3. needs_update: true  → tables を走査
-   - ローカルのハッシュ記録（user://master_hashes.json）と比較
-   - 不一致テーブルのみ URL から SQLite をDL
-   - DL完了後 user://master/{table_name}_{hash}.sqlite に保存
-   - ハッシュ記録を更新
-4. MasterDataManager を初期化して各テーブルのSQLiteを開く
+   - 保存のハッシュ（user://master_state.json）と比べ、違う・ファイルが無いテーブルだけ DL
+   - DL は .tmp に書いてから rename で確定する
+   - 全テーブルの取得後に、ハッシュと deploy_id を保存して DB を切り替える（途中で失敗したら旧 DB のまま）
+4. 切り替え後に現行ハッシュ以外の古いファイルを消し、master_data_loaded を出す
 ```
+
+起動後にサーバーのマスターが更新されたときは、HTTP 200 の応答に付く `X-Master-Update-Required` を `ApiClient` が検出し、`EventBus.master_update_required` 経由で裏の同期が 1 本だけ走る。
 
 ### ローカルストレージ構造
 
 ```
 user://
-├── master/                              # テーブル別SQLiteファイル
-│   ├── mst_item_a3f8c1d2....sqlite
-│   ├── mst_unit_7b9e4a11....sqlite
-│   ├── mst_gacha_2d5f8c90....sqlite
+├── master/                              # テーブル別SQLiteファイル（ハッシュ付き）
 │   └── ...
-└── master_hashes.json                   # テーブルごとの現在ハッシュ記録
-    {
-      "mst_item":  "a3f8c1d2...",
-      "mst_unit":  "7b9e4a11...",
-      "mst_gacha": "2d5f8c90..."
-    }
+└── master_state.json                    # deploy_id・master_hash・テーブルごとの現在ハッシュ（1 ファイル）
 ```
+
+起動時は、保存済みの更新 DB が全部そろっていればそれを開く。無い・欠けたときはアプリ同梱の `data/master.db` から始める。
 
 ---
 
@@ -112,27 +108,16 @@ user://
 ```
 NexusGodotMobileGameClient/
 ├── data/
-│   └── master.db                    # マスターデータベース（SQLite）
-├── scripts/
-│   ├── models/
-│   │   ├── sys/                     # システムデータモデル
-│   │   │   ├── sys_player.gd
-│   │   │   ├── sys_player_device.gd
-│   │   │   └── sys_player_token.gd
-│   │   ├── mst/                     # マスターデータモデル
-│   │   │   ├── mst_gacha.gd
-│   │   │   ├── mst_unit.gd
-│   │   │   └── mst_equipment.gd
-│   │   └── trx/                     # トランザクションデータモデル
-│   │       ├── trx_unit.gd
-│   │       ├── trx_equipment.gd
-│   │       └── trx_gacha_history.gd
-│   ├── managers/
-│   │   └── master_data_manager.gd   # マスターデータ管理マネージャー
-│   └── repositories/
-│       ├── mst_gacha_repository.gd
-│       ├── mst_unit_repository.gd
-│       └── mst_equipment_repository.gd
+│   └── master.db                    # 同梱マスターデータベース（SQLite。初回・更新 DB が欠けたとき用）
+└── master_data/
+    ├── domain/
+    │   ├── entities/                # MstUnit / MstEquipment / MstGacha（読み取りモデル）、MasterVersion など
+    │   ├── repositories/            # 契約（MstUnitRepository など、MasterStorageRepository）
+    │   └── use_cases/               # CheckMasterDataUseCase（同期）、CheckMasterDataResult
+    └── data/
+        ├── api/                     # version 応答の型
+        ├── local/                   # MasterDatabase（SQLite 接続）
+        └── repositories/            # LocalMstUnitRepository など、MasterDataApiRepository、LocalMasterDataRepository
 ```
 
 ## 🚀 セットアップ
@@ -158,93 +143,43 @@ git clone https://github.com/2shady4u/godot-sqlite.git sqlite
 
 `data/master.db` ファイルがプロジェクトルートに配置されていることを確認してください。
 
-### 3. Autoloadの確認
+### 3. オートロードの確認
 
-`project.godot` に以下が追加されていることを確認：
+マスターデータ専用のオートロードは無い。`AppContext`（依存の組み立て。`project.godot` の `[autoload]` の 2 番目）が `master_data/` の Repository と UseCase を作る。
 
 ```ini
 [autoload]
-MasterDataManager="*res://scripts/managers/master_data_manager.gd"
+EventBus="*res://core/domain/event_bus.gd"
+AppContext="*res://app/app_context.gd"
 ```
 
 ## 📖 使用方法
 
-### マスターデータの読み込み
+### マスターデータの読み取り
 
-マスターデータは自動的に読み込まれます。読み込み完了を待つ場合：
-
-```gdscript
-func _ready():
-    if MasterDataManager.is_initialized:
-        _use_master_data()
-    else:
-        MasterDataManager.master_data_loaded.connect(_use_master_data)
-
-func _use_master_data():
-    print("マスターデータが利用可能です")
-```
-
-### ガチャマスターの取得
+mst の Repository は `AppContext` から受け取る（presenter / UseCase が使う。`contexts/*` は `master_data/domain` の公開型だけを参照でき、`master_data/data` は参照しない）。メモリのキャッシュは持たず、毎回 SQLite から読む（DB が更新 DB に切り替わっても古い値が残らないため）。読み取りは `get_all()` と `get_by_id()`。
 
 ```gdscript
-# 全ガチャを取得
-var all_gachas = MasterDataManager.get_gacha_repository().get_all()
-for gacha in all_gachas:
-    print("ガチャ: ", gacha.name, " (", gacha.id, ")")
-
-# 有効なガチャのみ取得
-var active_gachas = MasterDataManager.get_gacha_repository().get_all_active()
-
-# IDで取得
-var gacha = MasterDataManager.get_gacha_repository().get_by_id("gacha_001")
+# ガチャ
+var gachas := AppContext.mst_gacha_repository().get_all()
+var gacha := AppContext.mst_gacha_repository().get_by_id("gacha_001")
 if gacha != null:
-    print("ガチャ名: ", gacha.name)
     print("開催期間: ", gacha.start_at, " ~ ", gacha.end_at)
+
+# ユニット（レアリティの高い順。同じなら id 昇順）
+var units := AppContext.mst_unit_repository().get_all()
+var unit := AppContext.mst_unit_repository().get_by_id("unit_001")
+
+# 装備
+var equipments := AppContext.mst_equipment_repository().get_all()
+var equipment := AppContext.mst_equipment_repository().get_by_id("equip_001")
 ```
 
-### ユニットマスターの取得
+型（`MstUnit` など）の `type` / `element` / `rarity` は DB の文字列のまま（`"Attack"` / `"Fire"` / `"SSR"` など）。フィルタや計算（開催中か等）は読み取りモデルに持たず、使う側のコンテキストの UseCase が行う。
 
-```gdscript
-# 全ユニットを取得
-var all_units = MasterDataManager.get_unit_repository().get_all()
+### 更新の完了を待つ
 
-# レアリティでフィルタ
-var ssr_units = MasterDataManager.get_unit_repository().get_by_rarity(MstUnit.Rarity.SSR)
-
-# 属性でフィルタ
-var fire_units = MasterDataManager.get_unit_repository().get_by_element(MstUnit.Element.FIRE)
-
-# IDで取得
-var unit = MasterDataManager.get_unit_repository().get_by_id("unit_001")
-if unit != null:
-    print("ユニット名: ", unit.name)
-    print("レアリティ: ", unit.get_rarity_string())
-    print("属性: ", unit.get_element_string())
-```
-
-### 装備マスターの取得
-
-```gdscript
-# 全装備を取得
-var all_equipment = MasterDataManager.get_equipment_repository().get_all()
-
-# 有効な装備のみ取得
-var active_equipment = MasterDataManager.get_equipment_repository().get_all_active()
-
-# レアリティでフィルタ
-var ur_equipment = MasterDataManager.get_equipment_repository().get_by_rarity(MstEquipment.Rarity.UR)
-
-# タイプでフィルタ
-var attack_equipment = MasterDataManager.get_equipment_repository().get_by_type(MstEquipment.EquipmentType.ATTACK)
-
-# IDで取得
-var equipment = MasterDataManager.get_equipment_repository().get_by_id("equip_001")
-if equipment != null:
-    print("装備名: ", equipment.name)
-    print("攻撃力: ", equipment.attack)
-    print("防御力: ", equipment.defense)
-    print("HP: ", equipment.hp)
-```
+`CheckMasterDataUseCase` のシグナルで受ける。`download_progress(current, total, table_name)` は進捗表示（タイトルの「マスターデータを更新中 (n/m)」）、`master_data_loaded` は DB の切り替え完了。
 
 ## 🔄 マスターデータの更新
 
@@ -308,173 +243,20 @@ VersionResponse を修正:
   - master.hash（全体ハッシュ）→ master.tables（テーブルごとのハッシュ + URL）に変更
 ```
 
-### TODO 2: MasterDataManager — バージョンチェック & 差分DL
+### クライアント側の実装（TODO 2〜5 は実装済み）
 
-`scripts/managers/master_data_manager.gd` に以下を実装する。
-
-```gdscript
-# ---- 実装すべき処理 ----
-
-# 1. auth/version API を叩く
-#    POST /api/auth/version { deploy_version: <保存済みdeploy_id> }
-#    レスポンスの master.tables を取得
-
-# 2. ローカルのハッシュ記録（user://master_hashes.json）と比較
-#    不一致テーブル = 更新が必要なテーブル
-
-# 3. 更新が必要なテーブルの SQLite を DL
-#    GET {url} → user://master/mst_{table}_{hash}.sqlite に保存
-#    HTTPRequest ノードを使用（Godot 組み込み）
-
-# 4. DL完了後にハッシュ記録を更新
-#    user://master_hashes.json を書き込む
-
-# 5. MasterDataManager を再初期化
-#    各テーブルの SQLite を開き直す
-```
-
-**実装イメージ（GDScript）:**
-
-```gdscript
-## scripts/managers/master_data_manager.gd に追加
-
-const HASHES_PATH = "user://master_hashes.json"
-const MASTER_DIR  = "user://master/"
-
-## バージョンチェックを行い、必要なテーブルのみDLして更新する
-## title.gd の認証完了後に呼び出す
-func check_and_update(deploy_version: int) -> void:
-    # auth/version API を叩く（AuthService 経由）
-    # レスポンスの master.tables を走査
-    # _load_local_hashes() と比較
-    # 不一致テーブルを _download_table_sqlite() でDL
-    # _save_local_hashes() でハッシュ記録更新
-    # _reload_all_tables() で再初期化
-    pass
-
-## ローカルのハッシュ記録を読み込む
-## 戻り値: { "mst_item": "abc123...", "mst_unit": "def456...", ... }
-func _load_local_hashes() -> Dictionary:
-    if not FileAccess.file_exists(HASHES_PATH):
-        return {}
-    var file = FileAccess.open(HASHES_PATH, FileAccess.READ)
-    return JSON.parse_string(file.get_as_text())
-
-## ハッシュ記録を保存する
-func _save_local_hashes(hashes: Dictionary) -> void:
-    var file = FileAccess.open(HASHES_PATH, FileAccess.WRITE)
-    file.store_string(JSON.stringify(hashes))
-
-## テーブルの SQLite をサーバーからDLして user://master/ に保存する
-## 完了シグナル: table_downloaded(table_name: String)
-func _download_table_sqlite(table_name: String, url: String, hash: String) -> void:
-    # HTTPRequest ノードを使用
-    # DL先: user://master/mst_{table_name}_{hash}.sqlite
-    pass
-
-## 全テーブルの SQLite を開き直してリポジトリを再初期化する
-func _reload_all_tables() -> void:
-    # 各テーブル用の SQLite.new() を開く
-    # リポジトリに渡す
-    pass
-```
-
-### TODO 3: title.gd — バージョンチェックを起動フローに組み込む
-
-```gdscript
-## scenes/title/title.gd
-
-func _on_login_completed(data: Dictionary) -> void:
-    UserDataManager.set_login_data(data)
-    
-    # ★ TODO: ここでマスタデータのバージョンチェック & 差分DLを挟む
-    # MasterDataManager.check_and_update(UserDataManager.deploy_version)
-    #   → 完了シグナルを受けてからシーン遷移する
-    
-    SceneManager.goto_login_bonus()
-```
-
-### TODO 4: ローカルデータの初期化処理
-
-初回起動時 or ハッシュ記録がない場合は全テーブルをDLする。
-既存の `res://data/master.db`（アプリ同梱）はフォールバック用として残すか、
-削除して完全にサーバーDL方式に移行するかを決定する。
-
-```gdscript
-# 判定ロジック案
-if not DirAccess.dir_exists_absolute("user://master/"):
-    DirAccess.make_dir_absolute("user://master/")
-    # 全テーブルをDL（初回）
-else:
-    # ハッシュ比較して差分のみDL
-```
-
-### TODO 5: DL進捗の表示
-
-大量テーブルのDL中はプレイヤーに進捗を見せる必要がある。
-タイトル画面にローディングUIを追加する。
-
-```gdscript
-# 例: "マスターデータを更新中... (3/12)"
-signal download_progress(current: int, total: int, table_name: String)
-```
+バージョン確認・差分 DL・ハッシュ記録・DB の切り替え・進捗表示は `master_data/` に実装した（上の「auth/version APIとの連携」と `docs/design/title-to-home/client_design.md` 5 節）。旧実装の `MasterDataManager`（オートロード）と、そのコード例（`scripts/managers/master_data_manager.gd`、`user://master_hashes.json`）は廃止した。
 
 ---
 
-## 🔍 キャッシュ機構
-
-各リポジトリはメモリキャッシュを持っており、2回目以降の取得は高速です。
-
-```gdscript
-# キャッシュをクリアして再読み込み
-MasterDataManager.get_gacha_repository().clear_cache()
-var fresh_data = MasterDataManager.get_gacha_repository().get_all()
-```
-
-## ⚙️ パフォーマンス最適化
-
-- **起動時の一括読み込み**: `get_all()` を起動時に呼んでキャッシュをウォームアップ
-- **必要な時のみ読み込み**: `get_by_id()` で個別にオンデマンド読み込み
-- **フィルタリングはメモリ内**: SQLクエリではなくGDScriptでフィルタ
-
-```gdscript
-func _ready():
-    # 起動時に全マスターデータをキャッシュ
-    MasterDataManager.master_data_loaded.connect(_warmup_cache)
-
-func _warmup_cache():
-    MasterDataManager.get_gacha_repository().get_all()
-    MasterDataManager.get_unit_repository().get_all()
-    MasterDataManager.get_equipment_repository().get_all()
-    print("マスターデータキャッシュのウォームアップ完了")
-```
-
 ## 📝 モデルクラス
 
-### Enumの使用例
+`MstUnit` / `MstEquipment` / `MstGacha`（`master_data/domain/entities/`）は `RefCounted` の読み取りモデルで、サーバー（DB）の列をそのまま持つ。レアリティ・属性・タイプは文字列のまま（enum は持たない）。
 
-```gdscript
-# レアリティ
-MstUnit.Rarity.C       # Common
-MstUnit.Rarity.UC      # Uncommon
-MstUnit.Rarity.R       # Rare
-MstUnit.Rarity.SR      # Super Rare
-MstUnit.Rarity.SSR     # Super Super Rare
-MstUnit.Rarity.UR      # Ultra Rare
-
-# 属性
-MstUnit.Element.FIRE
-MstUnit.Element.WATER
-MstUnit.Element.WIND
-MstUnit.Element.EARTH
-MstUnit.Element.LIGHT
-MstUnit.Element.DARK
-
-# ユニット/装備タイプ
-MstUnit.UnitType.ATTACK
-MstUnit.UnitType.DEFENSE
-MstUnit.UnitType.SUPPORT
-```
+| モデル | 主な項目 |
+|--------|----------|
+| `MstUnit` | `id` `deploy_key` `type` `element` `rarity` |
+| `MstEquipment` / `MstGacha` | 各ファイルの冒頭コメントを参照 |
 
 ## 🐛 トラブルシューティング
 

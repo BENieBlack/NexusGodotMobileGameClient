@@ -97,7 +97,7 @@ func test_initialize_falls_back_when_downloaded_file_is_missing() -> void:
 ##   is_active の 0/1 が bool になる。無い id は null。
 func test_mst_repositories_read_rows() -> void:
 	_new_repository().initialize()
-	var units := LocalMasterUnitRepository.new(_database)
+	var units := LocalMstUnitRepository.new(_database)
 	var ids: Array[String] = []
 	for unit in units.get_all():
 		ids.append(unit.id)
@@ -105,13 +105,13 @@ func test_mst_repositories_read_rows() -> void:
 	assert_str(units.get_by_id("u1").element).is_equal("Fire")
 	assert_object(units.get_by_id("nope")).is_null()
 
-	var equipments := LocalMasterEquipmentRepository.new(_database)
+	var equipments := LocalMstEquipmentRepository.new(_database)
 	assert_int(equipments.get_all().size()).is_equal(2)
 	var equipment := equipments.get_by_id("e2")
 	assert_bool(equipment.is_active).is_false()
 	assert_int(equipments.get_by_id("e1").attack).is_equal(10)
 
-	var gachas := LocalMasterGachaRepository.new(_database)
+	var gachas := LocalMstGachaRepository.new(_database)
 	var gacha := gachas.get_by_id("g1")
 	assert_str(gacha.start_at).is_empty()
 	assert_int(gacha.daily_limit).is_equal(3)
@@ -120,7 +120,7 @@ func test_mst_repositories_read_rows() -> void:
 
 ## 前提: DB を開いていない。操作: mst Repository で読む。期待: 例外にならず空 / null。
 func test_mst_repositories_return_empty_without_database() -> void:
-	var units := LocalMasterUnitRepository.new(MasterDatabase.new())
+	var units := LocalMstUnitRepository.new(MasterDatabase.new())
 	assert_array(units.get_all()).is_empty()
 	assert_object(units.get_by_id("u1")).is_null()
 

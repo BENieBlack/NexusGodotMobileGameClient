@@ -11,18 +11,20 @@ config_version=5
 [application]
 
 config/name="NexusGodotMobileGameClient"
-run/main_scene="res://scenes/title/title.tscn"
+run/main_scene="res://contexts/auth/presentation/title/title.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
 
 [autoload]
 
+; 順序が大事: EventBus（シグナルの置き場）→ AppContext（依存の組み立て。_ready で他のオートロードを呼ばない）
+; → SceneRouter（画面遷移）→ Toast（通知。EventBus を購読する）→ E2EDriver（検証用。--e2e が無ければ何もしない）。
+; E2EDriver は debug/ にあり、製品ビルドではエクスポートから除外する（その場合はこの 1 行も外す）
 EventBus="*res://core/domain/event_bus.gd"
-UserDataManager="*res://scripts/managers/user_data_manager.gd"
-SceneManager="*res://scripts/managers/scene_manager.gd"
-AuthService="*res://scripts/services/auth_service.gd"
-MasterDataManager="*res://scripts/managers/master_data_manager.gd"
-ToastManager="*res://scripts/managers/toast_manager.gd"
+AppContext="*res://app/app_context.gd"
+SceneRouter="*res://app/scene_router.gd"
+Toast="*res://core/presentation/toast.gd"
+E2EDriver="*res://debug/e2e_driver.gd"
 
 [display]
 
@@ -34,6 +36,12 @@ window/handheld/orientation=1
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/godot-sqlite/plugin.cfg", "res://addons/gdUnit4/plugin.cfg")
+
+[nexus]
+
+; 接続先の既定値（環境変数 NEXUS_API_BASE_URL / NEXUS_MASTER_BASE_URL が優先。ApiConfig を参照）
+api_base_url="http://localhost:8090/api"
+master_base_url="http://localhost:8091"
 
 [physics]
 

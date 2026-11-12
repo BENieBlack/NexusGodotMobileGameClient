@@ -2,8 +2,27 @@
 
 ## 基本情報
 
-- **ベースURL**: `http://localhost:8080/api`（開発環境）
+- **ベースURL**: `http://localhost:8090/api`（開発環境）。マスターデータの配信ホストは `http://localhost:8091`
+  - どちらも `core/data/config/api_config.gd`（`ApiConfig`）の 1 か所。環境変数 `NEXUS_API_BASE_URL` / `NEXUS_MASTER_BASE_URL`、または `project.godot` の `[nexus]` で変える
+  - ポート 8080 は API ではなく Reverb（WebSocket。`core/presentation/toast.gd`。この機能の対象外）
 - **コンテンツタイプ**: `application/json`
+- **項目・エラーコードの正**: サーバーの `docs/design/title-to-home/api.md`。このファイルはクライアントの使い方の要点だけを書き、項目は複製しない
+
+### クライアントが使うヘッダー
+
+| ヘッダー | 向き | 内容 |
+|---------|------|------|
+| `Authorization: Bearer {access_token}` | 送信 | 認証付き API。`ApiClient` が付ける（sign_up / sign_in / version / refresh には付けない） |
+| `X-Unique-Request-Identifier` | 送信 | 冪等キー（UUID v4）。**login と consent に付ける**。寿命は「ひとつの操作」で、presenter が持つ。通信断・409・503 の再送では同じキー、業務エラー（299）の後は作り直す（client_design.md 3-4） |
+| `X-Master-Hash` | 送信 | 端末が持つマスターのハッシュ。空でなければ全リクエストに付ける |
+| `X-Master-Update-Required: true` | 受信 | HTTP 200 の応答に付く。マスターを裏で更新する（`master_data`）。version API の応答では無視する |
+| `X-Client-Timestamp` / `X-Client-Nonce` / `X-Client-Signature` | 送信 | sign_up の署名（下記） |
+
+### 0. バージョン確認（マスターデータの更新要否）
+
+**エンドポイント**: `GET /auth/version?deploy_version={保存済みの deploy_id}`（認証不要。メンテナンス中も通る）
+
+タイトルの最初（認証の前）に `master_data` の `CheckMasterDataUseCase` が呼ぶ。`needs_update` が真なら、差分のテーブルだけ配信ホストからダウンロードして DB を切り替える。ファイルの `url` は `/` 始まりなら配信ホストを前置し、`http` 始まりならそのまま使う。失敗しても止めずに、保存済み（または同梱）のデータで続行する。詳細は [docs/MASTER_DATA.md](../docs/MASTER_DATA.md)。
 
 ## 認証フロー
 
@@ -46,7 +65,7 @@ X-Client-Signature: HMAC-SHA256("{timestamp}:{nonce}:{request_body}")
     "level": 1,
     "level_exp": 0,
     "vip_point": 0,
-    "total_paid_amount": 0,
+    "total_paid_amount": "0.00",
     "last_login_at": null
   },
   "sys_player_device": { ... },
@@ -68,37 +87,23 @@ X-Client-Signature: HMAC-SHA256("{timestamp}:{nonce}:{request_body}")
 
 **エンドポイント**: `POST /auth/login`
 
-**必須ヘッダー**: `Authorization: Bearer {access_token}`
+**必須ヘッダー**: `Authorization: Bearer {access_token}`、`X-Unique-Request-Identifier`（冪等キー）
 
-**レスポンス**:
-```json
-{
-  "sys_player": { ... },
-  "trx_unit_list": [
-    { "trx_unit_id": 1, "mst_unit_id": 1, "grade": 1, "level": 1, "level_exp": 0, "is_delete": false }
-  ],
-  "trx_item_list": [
-    { "mst_item_id": 1, "free_amount": 100, "paid_amount": 0, "is_delete": false }
-  ],
-  "trx_wallet_list": [
-    { "mst_item_id": 1, "free_amount": 1000, "paid_amount": 0, "is_delete": false }
-  ],
-  "login_bonus_list": [
-    {
-      "unique_id": "uuid-v4",
-      "type": "gold",
-      "id": "gold",
-      "amount": 100,
-      "expire_at": null,
-      "metadata": null
-    }
-  ]
-}
-```
+認証成功の直後にタイトルが 1 回だけ呼ぶ（`login` の `LoginUseCase`）。成功するまで規約・ログインボーナス・ホームへ進まない。
+
+**レスポンスの項目**（正はサーバーの api.md。例は載せない）:
+
+| 項目 | 保持先 |
+|------|--------|
+| `sys_player` | `player` の Repository（`my_id` がプレイヤー ID）。`total_paid_amount` は文字列（`"0.00"`）、`vip_point` は整数 |
+| `trx_unit_list` / `trx_item_list` / `trx_wallet_list` / `trx_diamond_list` / `trx_equipment_list` / `trx_stamina_list` | `player` の Repository（要素は Dictionary のまま。キーが無い・null は空配列として扱う） |
+| `login_bonus_list` | `login` の Repository。要素は `unique_id` / `type` / `id` / `amount` / `expire_at`（常に null）/ `metadata`（null 可。`grade` があるときだけグレードを表示する） |
+
+保持はメモリのみ（永続化しない）。
 
 ### 4. トークンリフレッシュ
 
-**エンドポイント**: `POST /auth/refresh_token`
+**エンドポイント**: `POST /auth/refresh_token`（`ApiClient` が 401 のときに自動で呼ぶ。画面からは呼ばない）
 
 **リクエストボディ**:
 ```json
@@ -112,14 +117,39 @@ X-Client-Signature: HMAC-SHA256("{timestamp}:{nonce}:{request_body}")
 }
 ```
 
+### 5. 未同意の規約の取得
+
+**エンドポイント**: `GET /agreement/pending`（認証付き）
+
+規約画面の表示時に呼ぶ（`agreement` の `FetchPendingAgreementsUseCase`）。`agreement_list` が空なら画面を見せずにログインボーナスへ進む。
+
+### 6. 規約への同意
+
+**エンドポイント**: `POST /agreement/consent`（認証付き・冪等キー付き）
+
+ボディは `{"sys_agreement_id": N}`。規約ごとに 1 件ずつ、規約ごとの冪等キーで送る。成功の本文は項目の無い空の配列 `[]` で返ることがあるので、`ApiClient` に `allow_empty_body` を指定して成功扱いにする。24002（同意済み）は成功扱い、24001（規約が存在しない・公開前）は未同意の一覧を取り直す。
+
 ## エラーレスポンス
+
+クライアントは **HTTP ステータスで分類**する（`ApiClient` → `AppError.kind`。表示は README の「エラーハンドリング」の表と client_design.md 1-3）。401・429・503（メンテナンス）の本文には `error_code` が無い。`error_code` を見るのは 299 だけ。
 
 ### HTTP 299（ビジネスエラー）
 ```json
 { "error_code": 1001, "message": "エラーメッセージ" }
 ```
+本番では `message` がマスクされることがあるので、画面にはコードを出し、`message` は補助にとどめる。
 
-### HTTP 503（メンテナンス）
+### HTTP 401 / 409 / 422 / 429
+
+| ステータス | 本文・意味 |
+|-----------|-----------|
+| 401 | 認証付きはトークン期限切れ → 自動 refresh。認証なし（sign_up）は署名不正（本文の `error` が `INVALID_SIGNATURE` / `REQUEST_EXPIRED` など） |
+| 409 | 同じ操作が処理中（`error_code` 40900）。同じ冪等キーで再試行する |
+| 422 | 入力の検証エラー |
+| 429 | レート制限。本文の `retry_after`（秒）の間は再試行を待たせる |
+
+### HTTP 503（メンテナンス / ロック基盤の不達）
+`error_code` が無ければメンテナンス（`title` / `message` / `end_at` を表示する）、`error_code` が 50300 なら `SERVER_BUSY`（「しばらくしてから」）。
 ```json
 {
   "error": "Service Unavailable",

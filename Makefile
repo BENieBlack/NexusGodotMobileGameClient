@@ -21,7 +21,7 @@ export GODOT_BIN
 SHELL := /bin/bash
 VENV := .venv-tools
 PYTHON ?= python3
-# lint / format の対象は新構成のディレクトリだけ（旧構成の scripts/ scenes/ は対象外）。
+# lint / format の対象は新構成のディレクトリだけ（旧構成の scripts/ scenes/ は削除済み）。
 # $(wildcard ...) は実在するものだけに展開されるので、まだ無いディレクトリ（debug/ など）があっても
 # 引数に紛れ込まない。新構成のディレクトリを足したら、ここと tools/check_dependencies.py の
 # CHECK_DIRS の両方に足す

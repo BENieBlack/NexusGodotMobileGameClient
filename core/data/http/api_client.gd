@@ -65,6 +65,12 @@ const NOT_TRIED_KINDS: Array[AppError.Kind] = [
 	AppError.Kind.SERVER_BUSY,
 ]
 
+## デバッグ専用: 応答の差し替え。(method: String, endpoint: String) -> ApiResult か null を返す Callable を
+## 入れると、_send の前に呼ばれ、ApiResult が返れば通信せずにそれを結果にする（null なら本物を送る）。
+## e2e ドライバー（debug/e2e_driver.gd の --e2e-fail-login）が login の失敗を再現するためだけに使う。
+## 製品のコードは設定しない（未設定なら何も起きない）。
+var debug_override: Callable = Callable()
+
 ## 今 refresh を実行中か（refresh を 1 本にまとめるためのフラグ）
 var _is_refreshing: bool = false
 
@@ -191,6 +197,11 @@ func _send_http(
 
 ## 1 回分の送信と分類。ヘッダーの組み立て → 送信 → 分類 → X-Master-Update-Required の検出。
 func _send(method: String, endpoint: String, body: Dictionary, options: Dictionary) -> ApiResult:
+	# デバッグの差し替えがあれば、通信せずにその結果を返す（上の debug_override の注記）
+	if debug_override.is_valid():
+		var faked: Variant = debug_override.call(method, endpoint)
+		if faked is ApiResult:
+			return faked
 	var use_auth: bool = options.get("auth", true)
 	var headers := _build_headers(
 		use_auth, str(options.get("idempotency_key", "")), options.get("extra_headers", [])

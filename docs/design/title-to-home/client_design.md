@@ -9,6 +9,8 @@
 >
 > 改訂履歴（第 1 段の実装を受けた修正）: refresh の実行（`/auth/refresh_token` の送信とログアウト判断 D9）は `ApiClient`（core）が持ち、core の契約は token の供給（`refresh_token` / `save_tokens`）に絞った（3-1・3-5）。マスターの起動時は、保存済みの更新 DB が全部そろっていればそちらを開き、状態は `user://master_state.json` の 1 ファイルにした（5 節）。
 
+> 改訂履歴（第 3 段の実装を受けた修正）: 画面（presentation）・`SceneRouter`・`Toast`・オートロードの切り替え・旧構成の削除・e2e ドライバーまでを実装した。設計との差分: ① presenter が読む UseCase を足した（`login` の `GetLoginBonusesUseCase`、`player` の `GetPlayerIdUseCase`、`auth` の `GetAccessTokenUseCase`〔Reverb の認証に渡すトークン〕と `AuthenticateUseCase.is_new_user()`〔「新規登録中...」と「ログイン中...」の出し分け〕）。② エラー文言と表示は `core/presentation/{error_messages,error_view}.gd` に共通化。③ `Toast.connect_to_reverb(user_id, access_token)` は認証情報を引数で受ける（`UserDataManager` の廃止に伴う。ギルドの自動購読は新構成へ移るまで行わない）。④ 検証用に `ApiClient.debug_override`（login の偽の失敗）を足した。⑤ e2e ドライバーは `debug/e2e_driver.gd`（7-1 の `tests/e2e/` から変更）、引数は `--e2e-case=<名前>`（`--e2e=<名前>` も可）。⑥ タイトルとホームの「APIテスト」ボタンは外した（api_test は debug 専用で、直接開く）。⑦ 旧 `scenes/` `scripts/` は削除済み（2-3 の移行の進め方は完了）。
+
 既存実装を**サーバー設計に合わせて直す**ための設計。サーバーが正で、食い違いはクライアントを合わせる。サーバーの仕様（項目・エラー）は複製せず、api.md を参照する。この文書はコードを変えない。変更するファイル・関数は、実コードを読んで特定した。
 
 ## 0. 現状の確認結果（設計の前提）
@@ -61,7 +63,7 @@ flowchart TD
 | 画面 | 状態 | 表示 | 次の動作 |
 | --- | --- | --- | --- |
 | タイトル | 進行中 | `status_label` に段階を文字で出す: 「マスターデータを確認中...」→（更新があれば）「マスターデータを更新中 (n/m)」→「認証中...」（既存は「ログイン中...」、新規は「新規登録中...」）→「ゲームデータを取得中...」→「ログイン成功!」 | 自動で次へ |
-| タイトル | エラー | `status_label` にエラー文（4 節の表）、「再試行」ボタンを表示。進行中はボタンを隠す | ボタンで、**失敗した段階から**やり直す（成功済みの段階は繰り返さない）。ただし MASTER 段階が `FAILED` だったとき（`_master_failed`）は、**MASTER 段階から**やり直す（初回は `master_hash` が空で `X-Master-Hash` が付かず、サーバーからの更新要求も来ないため、ここが再取得の唯一の手段） |
+| タイトル | エラー | `status_label` にエラー文（4 節の表）、「再試行」ボタンを表示。進行中はボタンを隠す | ボタンで、**失敗した段階から**やり直す（成功済みの段階は繰り返さない）。ただし MASTER 段階が `FAILED` だったとき（`_master_failed`）は、**MASTER 段階から**やり直す（LOGIN など後ろの段階の失敗の再試行でも、MASTER が FAILED のときは MASTER から再実行する。冪等キーは保持する。初回は `master_hash` が空で `X-Master-Hash` が付かず、サーバーからの更新要求も来ないため、ここが再取得の唯一の手段） |
 | タイトル | メンテナンス | 503 の `title` と `message`（あれば `end_at`）を表示、「再試行」 | 同上 |
 | 規約 | 読み込み中 | 「読み込み中...」（現行は空白のまま。ラベルを足す） | pending 取得 |
 | 規約 | 空 | 画面を見せず、そのままログインボーナスへ（要件: 無ければ見えない） | 自動 |
@@ -144,8 +146,8 @@ HTTP ステータスで分類する。401・429・503（メンテ）には `erro
 ### 2-3. 移行の進め方
 
 - 最初の移行は **core・`master_data/` と関係するコンテキスト（auth / login / player / agreement）を一括で**行う（`ApiClient` がトークンと `master_hash` の契約を要するため。「コンテキストの一部だけ移した状態を残さない」ルールの例外。architecture.md 8 節）。
-- 旧 `UserDataManager` が残る間は、旧側も `EventBus.session_expired` を受ける移行用転送を置く（新 `ApiClient` の refresh 失敗で旧状態も空にするため）。
-- **第 2 段の作業項目**: 旧構成（`scripts/` の `mst_*` モデル・Repository）を削除した後、衝突回避で付けた `master_data/` の `Master*` を `Mst*` に改名する（`MasterUnit` → `MstUnit`、`MasterUnitRepository` → `MstUnitRepository`、`LocalMasterUnitRepository` → `LocalMstUnitRepository` など。`git mv` で `.gd` と `.gd.uid` を一緒に動かす）。
+- （移行中の取り決め。完了したので不要）旧 `UserDataManager` が残る間は、旧側も `EventBus.session_expired` を受ける移行用転送を置く（新 `ApiClient` の refresh 失敗で旧状態も空にするため）。
+- **第 3 段で実施済み**: 旧構成（`scripts/` の `mst_*` モデル・Repository）を削除した後、衝突回避で付けた `master_data/` の `Master*`（`MasterUnit` など）を `Mst*`（`MstUnit`・`MstUnitRepository`・`LocalMstUnitRepository` など）に改名した。同じく規約の `PendingAgreement` も `SysAgreement` に戻した（`git mv` で `.gd` と `.gd.uid` を一緒に動かした）。
 - `api_test` と e2e ドライバーは debug 用の置き場（`debug/` または `tests/e2e/`）に置き、エクスポート除外か debug ビルド専用のオートロードにする。`tests/`・`debug/` は `app` を参照してよい。
 
 ### 2-4. 二重定義・複数生成の整理の方針（まとめ）
@@ -325,7 +327,7 @@ overview の「保存済みトークンの有無で最初に呼ぶ API を決め
 - サーバー: `NexusLaravelMobileGameServer` で `make up`（API :8090、配信 :8091）、`make migrate-fresh && make seed`（`SysDeploySeeder` `MstLoginBonusSeeder` を含む。ログインボーナスは 7 日ループの通常ボーナス）。
 - 規約（`sys_agreement`）と `sys_maintenance` は**シーダーが無い**ので、ケースごとに手で投入する（下の各ケース。SQL は S5 で実際に通る文を確認する。仮置き）。
 - クライアント: 縦長 1080x1920（`project.godot` の `window/size` に一致）。録画は Godot の Movie Maker: `godot --path <client> --write-movie <out.avi> --resolution 1080x1920 --fixed-fps 30 -- --e2e=<ケース名>`。
-- **自動操作**: 規約の同意ボタンとログインボーナスのタップは人の操作なので、録画では自動操作が要る。S5 で `tests/e2e/e2e_driver.gd`（debug 用。エクスポート除外か debug ビルドのみのオートロード）をオートロード（最後）に足す。`--e2e=...` が無いと何もしない。駆動する内容:
+- **自動操作**: 規約の同意ボタンとログインボーナスのタップは人の操作なので、録画では自動操作が要る。S5 で `debug/e2e_driver.gd`（debug 用。エクスポート除外）をオートロード（最後）に足した。`--e2e-case=<名前>`（または `--e2e=...`）が無いと何もしない。駆動する内容:
   - `--e2e-reset`: 起動時に デバッグ専用の全消去（旧 `UserDataManager.logout()` 相当。保存の削除）と `reset_device_id()`（`auth` の device_id 保存） を実行（新規ユーザーの再現）。
   - 画面ごとに「現れるまで待つ（シーンのパスで判定）→ `Input.parse_input_event` でボタンの中心・画面中央をクリック」。規約画面は同意ボタン、ログインボーナス画面は画面中央、エラー表示のときは「再試行」ボタン。
   - ホームに入って 2 秒後に `get_tree().quit()`。

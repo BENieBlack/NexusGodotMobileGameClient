@@ -8,11 +8,11 @@ class_name ConsentAgreementResult
 extends Result
 
 var refetched: bool = false
-var agreements: Array[PendingAgreement] = []
+var agreements: Array[SysAgreement] = []
 
 
 func _init(
-	p_error: AppError = null, p_refetched: bool = false, p_agreements: Array[PendingAgreement] = []
+	p_error: AppError = null, p_refetched: bool = false, p_agreements: Array[SysAgreement] = []
 ) -> void:
 	super(p_error == null, p_error)
 	refetched = p_refetched

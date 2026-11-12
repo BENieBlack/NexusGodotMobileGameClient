@@ -5,8 +5,9 @@
 ##       また、ApiClient の 2 つのシグナルを EventBus へ中継し、EventBus の受け手を登録する。
 ## 注意:
 ##   - オートロード用のスクリプトなので class_name を付けない（付けるとオートロード名と衝突する。依存チェック L1）。
-##     現段階では project.godot に登録していない（登録とオートロードの切り替えは第 3 段）。テストは
-##     load("res://app/app_context.gd").new() で Node として生成し、add_child する。
+##     project.godot の [autoload] に 2 番目（EventBus の次）で登録している。テストは
+##     load("res://app/app_context.gd").new() で別の Node として生成し、add_child する
+##     （storage_root を差し替えて実機の user:// に触れない）。
 ##   - _ready では他のオートロードを呼ばない。EventBus は購読の登録（connect）と、ApiClient のシグナルを
 ##     EventBus のシグナルへつなぐことだけ。通信・遷移・Toast は呼ばない（起動順序に依存しないため）
 ## 組み立ての流れ（_ready）:
@@ -33,22 +34,25 @@ var _api_client: ApiClient
 var _master_database: MasterDatabase
 var _master_storage: LocalMasterDataRepository
 var _check_master_data_use_case: CheckMasterDataUseCase
-var _master_unit_repository: MasterUnitRepository
-var _master_equipment_repository: MasterEquipmentRepository
-var _master_gacha_repository: MasterGachaRepository
+var _mst_unit_repository: MstUnitRepository
+var _mst_equipment_repository: MstEquipmentRepository
+var _mst_gacha_repository: MstGachaRepository
 
 # --- auth ---
 var _auth_token_repository: LocalAuthTokenRepository
 var _authenticate_use_case: AuthenticateUseCase
 var _clear_auth_session_use_case: ClearAuthSessionUseCase
+var _get_access_token_use_case: GetAccessTokenUseCase
 
 # --- player ---
 var _player_repository: PlayerRepository
 var _apply_login_data_use_case: ApplyLoginDataUseCase
+var _get_player_id_use_case: GetPlayerIdUseCase
 
 # --- login ---
 var _login_bonus_repository: LoginBonusRepository
 var _login_use_case: LoginUseCase
+var _get_login_bonuses_use_case: GetLoginBonusesUseCase
 
 # --- agreement ---
 var _fetch_pending_agreements_use_case: FetchPendingAgreementsUseCase
@@ -90,8 +94,20 @@ func clear_auth_session_use_case() -> ClearAuthSessionUseCase:
 	return _clear_auth_session_use_case
 
 
+func get_access_token_use_case() -> GetAccessTokenUseCase:
+	return _get_access_token_use_case
+
+
 func apply_login_data_use_case() -> ApplyLoginDataUseCase:
 	return _apply_login_data_use_case
+
+
+func get_player_id_use_case() -> GetPlayerIdUseCase:
+	return _get_player_id_use_case
+
+
+func get_login_bonuses_use_case() -> GetLoginBonusesUseCase:
+	return _get_login_bonuses_use_case
 
 
 func login_use_case() -> LoginUseCase:
@@ -106,19 +122,28 @@ func consent_agreement_use_case() -> ConsentAgreementUseCase:
 	return _consent_agreement_use_case
 
 
+# --- デバッグ・e2e 用（製品の画面は使わない。debug/ だけが呼ぶ） ---
+
+
+## トークンと device_id の保存の窓口。e2e ドライバー（--e2e-reset / --e2e-corrupt-token）と
+## api_test が、保存を直接消す・書き換えるために使う。UseCase に載せないのは、製品の操作ではないため。
+func debug_auth_token_repository() -> LocalAuthTokenRepository:
+	return _auth_token_repository
+
+
 # --- mst の Repository（master_data。読み取りのみ。各コンテキストの UseCase が使う） ---
 
 
-func master_unit_repository() -> MasterUnitRepository:
-	return _master_unit_repository
+func mst_unit_repository() -> MstUnitRepository:
+	return _mst_unit_repository
 
 
-func master_equipment_repository() -> MasterEquipmentRepository:
-	return _master_equipment_repository
+func mst_equipment_repository() -> MstEquipmentRepository:
+	return _mst_equipment_repository
 
 
-func master_gacha_repository() -> MasterGachaRepository:
-	return _master_gacha_repository
+func mst_gacha_repository() -> MstGachaRepository:
+	return _mst_gacha_repository
 
 
 # --- 組み立て ---
@@ -147,21 +172,24 @@ func _build() -> void:
 	# master_data
 	var master_remote := MasterDataApiRepository.new(_api_client)
 	_check_master_data_use_case = CheckMasterDataUseCase.new(master_remote, _master_storage)
-	_master_unit_repository = LocalMasterUnitRepository.new(_master_database)
-	_master_equipment_repository = LocalMasterEquipmentRepository.new(_master_database)
-	_master_gacha_repository = LocalMasterGachaRepository.new(_master_database)
+	_mst_unit_repository = LocalMstUnitRepository.new(_master_database)
+	_mst_equipment_repository = LocalMstEquipmentRepository.new(_master_database)
+	_mst_gacha_repository = LocalMstGachaRepository.new(_master_database)
 	# auth
 	var auth_repository := AuthApiRepository.new(_api_client, _auth_token_repository)
 	_authenticate_use_case = AuthenticateUseCase.new(auth_repository, _auth_token_repository)
 	_clear_auth_session_use_case = ClearAuthSessionUseCase.new(_auth_token_repository)
+	_get_access_token_use_case = GetAccessTokenUseCase.new(_auth_token_repository)
 	# player
 	_player_repository = LocalPlayerRepository.new()
 	_apply_login_data_use_case = ApplyLoginDataUseCase.new(_player_repository)
+	_get_player_id_use_case = GetPlayerIdUseCase.new(_player_repository)
 	# login
 	_login_bonus_repository = LocalLoginBonusRepository.new()
 	_login_use_case = LoginUseCase.new(
 		LoginApiRepository.new(_api_client), _login_bonus_repository, _apply_login_data_use_case
 	)
+	_get_login_bonuses_use_case = GetLoginBonusesUseCase.new(_login_bonus_repository)
 	# agreement
 	var agreement_repository := AgreementApiRepository.new(_api_client)
 	_fetch_pending_agreements_use_case = FetchPendingAgreementsUseCase.new(agreement_repository)

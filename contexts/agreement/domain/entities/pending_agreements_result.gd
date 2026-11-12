@@ -4,9 +4,9 @@
 class_name PendingAgreementsResult
 extends Result
 
-var agreements: Array[PendingAgreement] = []
+var agreements: Array[SysAgreement] = []
 
 
-func _init(p_agreements: Array[PendingAgreement] = [], p_error: AppError = null) -> void:
+func _init(p_agreements: Array[SysAgreement] = [], p_error: AppError = null) -> void:
 	super(p_error == null, p_error)
 	agreements = p_agreements

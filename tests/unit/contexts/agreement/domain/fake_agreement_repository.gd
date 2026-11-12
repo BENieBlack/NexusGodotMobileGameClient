@@ -35,9 +35,9 @@ static func business(code: int) -> Result:
 
 ## 規約 ids を持つ成功の取得結果。
 static func pending_ok(ids: Array[int] = []) -> PendingAgreementsResult:
-	var agreements: Array[PendingAgreement] = []
+	var agreements: Array[SysAgreement] = []
 	for id in ids:
-		agreements.append(PendingAgreement.new(id, "1.0", "規約%d" % id))
+		agreements.append(SysAgreement.new(id, "1.0", "規約%d" % id))
 	return PendingAgreementsResult.new(agreements)
 
 

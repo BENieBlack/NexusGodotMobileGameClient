@@ -93,3 +93,12 @@ func test_network_error_is_returned_without_switch() -> void:
 	var result := await _use_case.handle()
 	assert_int(result.error.kind).is_equal(AppError.Kind.NETWORK)
 	assert_array(_repository.calls).contains_exactly(["sign_up"])
+
+
+## 前提: 保存トークンの有無（無し / あり）。操作: is_new_user。
+## 期待: 無しなら true、あれば false（タイトルが「新規登録中...」と「ログイン中...」を出し分ける根拠で、
+## handle が最初に呼ぶ API の選び方と同じ判定であること）。
+func test_is_new_user_follows_saved_tokens() -> void:
+	assert_bool(_use_case.is_new_user()).is_true()
+	_tokens.save_tokens("a", "r")
+	assert_bool(_use_case.is_new_user()).is_false()

@@ -1,0 +1,107 @@
+[gd_scene load_steps=8 format=3 uid="uid://c3x7y9k2n5h8p"]
+
+[ext_resource type="Script" path="res://contexts/player/presentation/home/home_presenter.gd" id="1_home"]
+[ext_resource type="Theme" path="res://assets/ui/casual_theme.tres" id="2_theme"]
+[ext_resource type="Texture2D" path="res://assets/ui/kenney_blue/icon_checkmark.png" id="3_icon"]
+[ext_resource type="VideoStream" path="res://assets/video/bg_loop.ogv" id="4_video"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.1, 0.42, 0.25, 0.9)
+corner_radius_top_left = 28
+corner_radius_top_right = 28
+corner_radius_bottom_right = 28
+corner_radius_bottom_left = 28
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.4, 0.9, 0.55, 0.8)
+shadow_color = Color(0, 0, 0, 0.4)
+shadow_size = 10
+shadow_offset = Vector2(0, 5)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_info_bg"]
+bg_color = Color(0.06, 0.28, 0.15, 0.8)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.3, 0.75, 0.45, 0.6)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_divider"]
+bg_color = Color(0.4, 0.9, 0.55, 0.3)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[node name="Home" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("2_theme")
+script = ExtResource("1_home")
+
+[node name="BgVideo" type="VideoStreamPlayer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stream = ExtResource("4_video")
+autoplay = true
+loop = true
+expand = true
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="PanelContainer" type="PanelContainer" parent="CenterContainer"]
+custom_minimum_size = Vector2(800, 0)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/PanelContainer"]
+layout_mode = 2
+theme_override_constants/separation = 40
+size_flags_horizontal = 3
+
+[node name="WelcomeLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 56
+theme_override_colors/font_color = Color(0.85, 1.0, 0.88, 1)
+theme_override_colors/font_outline_color = Color(0, 0.2, 0.1, 1)
+theme_override_constants/outline_size = 4
+text = "ホーム"
+horizontal_alignment = 1
+
+[node name="Divider" type="PanelContainer" parent="CenterContainer/PanelContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 3)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_divider")
+
+[node name="InfoBg" type="PanelContainer" parent="CenterContainer/PanelContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_info_bg")
+
+[node name="UserInfoLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/InfoBg"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 30
+theme_override_colors/font_color = Color(0.8, 1.0, 0.85, 1)
+theme_override_colors/font_outline_color = Color(0, 0.15, 0.07, 1)
+theme_override_constants/outline_size = 2
+text = "ユーザー情報"
+horizontal_alignment = 1

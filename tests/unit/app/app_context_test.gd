@@ -41,9 +41,12 @@ func test_builds_dependencies() -> void:
 	assert_object(_context.login_use_case()).is_not_null()
 	assert_object(_context.fetch_pending_agreements_use_case()).is_not_null()
 	assert_object(_context.consent_agreement_use_case()).is_not_null()
-	assert_object(_context.master_unit_repository()).is_not_null()
-	assert_object(_context.master_equipment_repository()).is_not_null()
-	assert_object(_context.master_gacha_repository()).is_not_null()
+	assert_object(_context.get_access_token_use_case()).is_not_null()
+	assert_object(_context.get_player_id_use_case()).is_not_null()
+	assert_object(_context.get_login_bonuses_use_case()).is_not_null()
+	assert_object(_context.mst_unit_repository()).is_not_null()
+	assert_object(_context.mst_equipment_repository()).is_not_null()
+	assert_object(_context.mst_gacha_repository()).is_not_null()
 
 
 ## 前提: ApiClient のトークン供給元に、保存済みのトークンがある（再起動の再現）。
