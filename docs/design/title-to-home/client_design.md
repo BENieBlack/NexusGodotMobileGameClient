@@ -6,6 +6,8 @@
 - サーバー設計（正）: `NexusLaravelMobileGameServer/docs/design/title-to-home/{db,api,sequence}.md`
 
 > 改訂履歴: クライアントのクリーンアーキテクチャ（presentation / domain / data の 3 層）+ 軽量 DDD 化（`.claude/architecture.md`）に合わせ、2 節（構成・変更ファイル）と各節のパス・クラス名を新構成に直した。**構造の変更**: マスターデータはコンテキストでなく共有モジュール `master_data/`（`contexts/` と同階層）に置く。 `ApiClient` のオートロード一本化 → `AppContext` が 1 つ生成（オートロード廃止）、`UserDataManager` を `auth` / `player` / `login` に分解、`ApiResult.kind` → 上位では `AppError.kind`。**API 呼び出し・エラー分類・冪等キー・refresh・確認手順の挙動は変えていない**。
+>
+> 改訂履歴（第 1 段の実装を受けた修正）: refresh の実行（`/auth/refresh_token` の送信とログアウト判断 D9）は `ApiClient`（core）が持ち、core の契約は token の供給（`refresh_token` / `save_tokens`）に絞った（3-1・3-5）。マスターの起動時は、保存済みの更新 DB が全部そろっていればそちらを開き、状態は `user://master_state.json` の 1 ファイルにした（5 節）。
 
 既存実装を**サーバー設計に合わせて直す**ための設計。サーバーが正で、食い違いはクライアントを合わせる。サーバーの仕様（項目・エラー）は複製せず、api.md を参照する。この文書はコードを変えない。変更するファイル・関数は、実コードを読んで特定した。
 
@@ -106,8 +108,8 @@ HTTP ステータスで分類する。401・429・503（メンテ）には `erro
 | 追加 | `core/domain/event_bus.gd`（オートロード `EventBus`。**`class_name` を付けない**） | `session_expired`、`master_update_required` のシグナル。`ApiClient` が自分のシグナルとして出し、`AppContext` が `EventBus` に中継する（`core/data` はオートロード名を参照しない）。`session_expired` の受け手は `auth` / `player` / `login`、`master_update_required` の受け手は `master_data` だけ（マスターは端末のもので `session_expired` では消さない）。循環を避けるため（2-4） |
 | 変更（移動） | `scripts/services/api_client.gd` → `core/data/http/api_client.gd` | **`AppContext` が 1 つ生成して Repository 実装に渡す**（オートロードにはしない）。シグナル（`request_completed` など）を廃し、`await api_client.request(method, endpoint, body, options) -> ApiResult` にする。`options`: `auth`（既定 true）、`idempotency_key`、`extra_headers`。1 呼び出しごとに `HTTPRequest` を作って破棄する（同時実行可）。`timeout = 15` 秒。分類・refresh・`X-Master-*` はここに閉じ込める（3 節）。トークンと `master_hash` は core が定義した契約（`core/domain/`）経由で受け取り、contexts を参照しない |
 | 追加 | `contexts/auth/domain/use_cases/authenticate_use_case.gd`（`AuthenticateUseCase`） | 旧 `AuthService.authenticate()` の振り分け（sign_in / sign_up の切り替え。3-3）。`await handle() -> Result`（成否だけなので専用の結果型は作らない）。成功でトークンを保存する |
-| 追加 | `contexts/auth/domain/repositories/auth_repository.gd`（契約）、`contexts/auth/data/repositories/auth_api_repository.gd` | 旧 `auth_service.gd` の通信部分（契約 `auth_repository` はテストで偽物に差し替えるために作る。sign_up / sign_in の応答は項目が少ないので専用の `*_response.gd` を作らず、data の中で取り出す）。独自の `HTTPRequest` / `BASE_URL` / シグナルを廃し、`api_client.request(..., {auth=false, extra_headers=署名})` を使う。署名関数（`_create_signed_headers` 等）と `reset_device_id()` はここ（または `data/local/` の device_id 保存）に残す。`CLIENT_SECRET` の保護は別機能（Q4）で、ここでは触らない |
-| 追加 | `contexts/auth/data/repositories/local_auth_token_repository.gd`（core の契約を実装する。別の契約は作らない） | 旧 `UserDataManager` のトークン部分（`auth_token` / `refresh_token` の保持・保存・`update_tokens`）、`is_new_user()` の根拠。`clear_session()` のトークン部分は `EventBus.session_expired` の受け手として行う |
+| 追加 | `contexts/auth/domain/repositories/auth_repository.gd`（契約）、`contexts/auth/data/repositories/auth_api_repository.gd` | 旧 `auth_service.gd` の通信部分（契約 `auth_repository` はテストで偽物に差し替えるために作る。sign_up / sign_in の応答は項目が少ないので専用の `*_response.gd` を作らず、data の中で取り出す）。refresh（`/auth/refresh_token`）の送信は `ApiClient` が行うので、ここには持たない。独自の `HTTPRequest` / `BASE_URL` / シグナルを廃し、`api_client.request(..., {auth=false, extra_headers=署名})` を使う。署名関数（`_create_signed_headers` 等）と `reset_device_id()` はここ（または `data/local/` の device_id 保存）に残す。`CLIENT_SECRET` の保護は別機能（Q4）で、ここでは触らない |
+| 追加 | `contexts/auth/data/repositories/local_auth_token_repository.gd`（core の契約を実装する。別の契約は作らない） | 旧 `UserDataManager` のトークン部分（`auth_token` / `refresh_token` の保持・保存・`update_tokens`）、`is_new_user()` の根拠。core の契約 `ApiAuthProvider`（`access_token()` / `refresh_token()` / `save_tokens()`）を実装し、`ApiClient` がトークンの読み出しと refresh 後の保存に使う。`clear_session()` のトークン部分は `EventBus.session_expired` の受け手として行う |
 | 変更（分解） | `scripts/managers/user_data_manager.gd` → `contexts/player/`（所持データ）・`contexts/login/`（ログインボーナス） | `trx_diamond_list` `trx_equipment_list` `trx_stamina_list` を追加。取り込みは `player/domain/use_cases/apply_login_data_use_case.gd`（login の応答から `sys_player`・trx 6 種を受ける）で、保持は `player/data/repositories/local_player_repository.gd`（メモリのみ）。`login_bonus_list` は `login/data/repositories/local_login_bonus_repository.gd`。**D9 のログアウト扱いは `logout()` ではなく `EventBus.session_expired`**: `auth`（トークンと保存の `user_data` を消す）と `player`（`user_data`・trx 一覧を空にする）・`login`（`login_bonus_list` を空にする）が受け手になる（`AppContext` が登録）。**`master_hash` と `master_deploy_id` は `master_data` の持ち物で、`session_expired` では消さない**（マスターの DB・ハッシュ〔`user://master/`、`master_hashes.json`〕は端末のものでアカウントに依存しないため）。旧 `logout()`（全部消す）は e2e の `--e2e-reset` 用に、デバッグ専用で残す |
 | 追加 | `contexts/login/domain/use_cases/login_use_case.gd`、`login/domain/repositories/login_repository.gd`、`login/data/repositories/login_api_repository.gd`、`login/data/api/login_response.gd` | `POST /auth/login`。`await handle(idempotency_key) -> Result`。応答を `login_response`（9 項目。`JsonReader` で変換、D3）にし、`player` の公開 UseCase に渡し、ログインボーナスを自コンテキストの Repository に保持する |
 | 変更（移動） | `scripts/managers/master_data_manager.gd` ほか → `master_data/`（`contexts/` の下ではない共有モジュール） | `master_data/domain/use_cases/check_master_data_use_case.gd`（`check_and_update()` を移す）、`master_data/data/repositories/master_data_api_repository.gd`（version GET とダウンロード）、`master_data/data/repositories/local_master_data_repository.gd`（SQLite・ハッシュ保存）。`mst_*` の Repository・モデルも `master_data/` に移す（`master_data/domain/` に読み取りモデルと契約、`master_data/data/` に実装）。`API_BASE_URL` / `MASTER_DATA_BASE_URL` は `ApiConfig` に置き換える。先頭の `is_logged_in` ガードと、body の `master_update_required` の読み取りを削除。戻り値を bool から `CheckMasterDataResult`（5 節）にする。version GET は `api_client.request("GET", "/auth/version?deploy_version=N", {}, {auth=false})` |
@@ -143,6 +145,7 @@ HTTP ステータスで分類する。401・429・503（メンテ）には `erro
 
 - 最初の移行は **core・`master_data/` と関係するコンテキスト（auth / login / player / agreement）を一括で**行う（`ApiClient` がトークンと `master_hash` の契約を要するため。「コンテキストの一部だけ移した状態を残さない」ルールの例外。architecture.md 8 節）。
 - 旧 `UserDataManager` が残る間は、旧側も `EventBus.session_expired` を受ける移行用転送を置く（新 `ApiClient` の refresh 失敗で旧状態も空にするため）。
+- **第 2 段の作業項目**: 旧構成（`scripts/` の `mst_*` モデル・Repository）を削除した後、衝突回避で付けた `master_data/` の `Master*` を `Mst*` に改名する（`MasterUnit` → `MstUnit`、`MasterUnitRepository` → `MstUnitRepository`、`LocalMasterUnitRepository` → `LocalMstUnitRepository` など。`git mv` で `.gd` と `.gd.uid` を一緒に動かす）。
 - `api_test` と e2e ドライバーは debug 用の置き場（`debug/` または `tests/e2e/`）に置き、エクスポート除外か debug ビルド専用のオートロードにする。`tests/`・`debug/` は `app` を参照してよい。
 
 ### 2-4. 二重定義・複数生成の整理の方針（まとめ）
@@ -161,7 +164,7 @@ HTTP ステータスで分類する。401・429・503（メンテ）には `erro
 | GET `/auth/version`（2 節） | 起動直後、認証の**前**。`CheckMasterDataUseCase`（`master_data/domain/use_cases/`）が呼ぶ（title の最初の段階） | query `deploy_version`（保存済みの `master_deploy_id`）。`X-Master-Hash` | なし（GET・認証なし） | 失敗しても**止めない**。同梱（または前回取得済み）の DB で続行し、通知する（5 節） |
 | POST `/auth/sign_up`（3 節） | 保存トークンが無いとき。または sign_in が 10002 のとき | `device_id`、`device_info{os, os_version, model, app_version}`、署名ヘッダー 3 種 | なし（認証前） | 10004 → sign_in に切り替え（3-3）。他は 1-3 の表 |
 | POST `/auth/sign_in`（4 節） | 保存トークンがあるとき。または sign_up が 10004 のとき | `device_id`、`device_info`（**4 項目すべて必須**、`app_version` は 20 文字以内） | なし | 10002 → sign_up に切り替え（3-3）。他は 1-3 の表 |
-| POST `/auth/refresh_token`（5 節） | `ApiClient` が認証付きリクエストで 401 を受けたとき（自動。refresh の実体は `auth` の `auth_api_repository` が実装し、契約経由で `ApiClient` に渡る） | `refresh_token`（64 桁） | なし | 299 の 10002 / 10003、200 以外、解析失敗はすべてログアウト扱い（3-5） |
+| POST `/auth/refresh_token`（5 節） | `ApiClient` が認証付きリクエストで 401 を受けたとき（自動。refresh の送信と失敗の判断は `ApiClient`（core）が持つ。契約は token の供給 `ApiAuthProvider` に絞り、`auth` の `local_auth_token_repository` が実装する） | `refresh_token`（64 桁） | なし | 299 の 10002 / 10003、200 以外、解析失敗はすべてログアウト扱い（3-5） |
 | POST `/auth/login`（6 節） | 認証成功の直後。title が 1 回 | ボディなし（`{}`） | **付ける** | 1-3 の表。成功するまで次へ進まない。成功時は 9 項目を保持（4 節） |
 | GET `/agreement/pending`（7 節） | 規約画面の `_ready` | なし | なし（GET は素通し） | 1-3 の表。スキップしない |
 | POST `/agreement/consent`（8 節） | 「すべての規約に同意して続ける」。規約ごとに 1 件ずつ、直列 | `sys_agreement_id` | **付ける（規約ごとに 1 キー）** | 24002 は成功扱い。24001 は pending を取り直す。他は 1-3 の表 |
@@ -240,7 +243,8 @@ overview の「保存済みトークンの有無で最初に呼ぶ API を決め
 - **並行リクエスト**: refresh は常に 1 本。進行中は、後から 401 を受けたリクエストはその完了を `await` で待ち、終わったら（成功なら）自分の再送に進む。失敗ならまとめて `SESSION_EXPIRED`。`_pending_request` は廃止し、再送に必要な値（メソッド・エンドポイント・ボディ・冪等キー）はリクエスト呼び出しのローカルで保持する。
 - **失敗の扱い（D9）**: refresh が次のいずれかなら**ログアウト扱い**にする: 保存の refresh_token が空、299 の 10003（無効・期限切れ・使用済み）、299 の 10002（プレイヤー／端末なし）、HTTP 200 以外、本文が解析できない、`token.access_token` が空。`EventBus.session_expired` を出して `auth` / `player` / `login` が状態を空にし（2-1。マスター情報は残す）、`SESSION_EXPIRED` を返す。呼び出し元の画面が、規約画面ならタイトルへ戻り、タイトルなら AUTH 段階から再開する。
 - ネットワーク断・429・503 など「refresh を試せなかっただけ」のときは**ログアウトしない**（`NETWORK` などをそのまま返す）。refresh は 429（15 分 10 回）の対象で、同じトークンの同時送信は片方が 10003 になりうる（api.md 5 節）。並行 401 を 1 本にまとめるのはこのため。
-- refresh のレスポンスには `sys_player` が無い。`update_tokens()` でトークンだけ更新する（現行のまま）。
+- refresh のレスポンスには `sys_player` が無い。トークンだけを、契約の `save_tokens()` で保存する（`refresh_token` が応答に無ければ手元の値を維持する）。
+- refresh の実行は `ApiClient`（core）が持つ（`/auth/refresh_token` の送信、上の失敗の分類、`session_expired` の発行）。契約（`ApiAuthProvider`）は token の供給（`access_token()` / `refresh_token()` / `save_tokens()`）に絞る。`auth` は契約の実装とセッション破棄の受け手だけで、refresh の通信を持たない。
 - refresh 要求には `Authorization` を付けない（サーバーはアクセストークンを見ない）。
 
 ## 4. Response からモデルへの対応
@@ -281,7 +285,10 @@ overview の「保存済みトークンの有無で最初に呼ぶ API を決め
 | 確認の時機 | タイトルの最初（認証の前）。F8 の「ログイン前」を満たす。version GET は認証不要なので、新規ユーザーでも呼べる（`is_logged_in` ガードを外す） |
 | `X-Master-Update-Required` | 3-5。起動後にサーバーが更新されたとき用 |
 | 配信ホスト | `ApiConfig.master_base_url()`（2-4、ADR 0001） |
-| 更新あり | 差分のテーブルだけ取得し、全テーブル取得後にハッシュと `deploy_id` を保存し、DB を切り替える（現行のとおり。途中で失敗したときは旧 DB のまま） |
+| 更新あり | 差分（保存のハッシュと違う、またはファイルが無いテーブル）だけ取得し、全テーブル取得後にハッシュと `deploy_id` を保存し、DB を切り替える（途中で失敗したときは旧 DB のまま）。ファイルは `.tmp` に書いてから rename で確定し、切替後に現行ハッシュ以外の古いファイルを消す |
+| 起動時の DB | 保存済みの更新 DB が全部そろっていればそちらを開く。同梱 DB は初回、または更新 DB のファイルが欠けたとき（欠けたときは `deploy_id` と `master_hash` を未取得に戻し、次の version 確認で取り直す）。旧実装は起動のたびに同梱 DB から始まっていた |
+| マスターの状態 | `user://master_state.json` の 1 ファイル（`deploy_id`・`master_hash`・テーブルごとのハッシュ）。旧 `master_hashes.json` と `UserDataManager` 内の値は引き継がず、初回に 1 回再取得する |
+| 同時実行 | 実行中の呼び出しは `IN_PROGRESS` を返し、実行中の同期の終了後に 1 回だけ再実行する（起動後の更新通知を取りこぼさず、二重 DL もしない） |
 | 戻り値 | `CheckMasterDataUseCase.handle()` を、`CheckMasterDataResult`（`{status, message}`（`status` は `UP_TO_DATE` / `UPDATED` / `FAILED`））を返す形にする。呼び出し元（title の presenter）が失敗を知る |
 | **更新失敗時（D8）** | **止めずに続行する**（同梱 DB または前回取得済みの DB で。サーバーが応答できなければ、続く認証でも失敗するので、そちらのエラー表示が出る）。続行するときは**通知する**: タイトルの `status_label` に「マスターデータを更新できませんでした。保存済みのデータで続行します」を 2 秒間出し、`Toast.show_toast("マスターデータ", "更新できませんでした。保存済みのデータで続行します")` も出す。タイトルでほかの段階が失敗して再試行するときは MASTER 段階から再試行する（3-2）。**すべて成功してホームへ進んだ場合は再試行ボタンが出ないので、初回（`master_hash` が空）の更新失敗は、次回起動までは同梱 DB のまま**（以降は `X-Master-Hash` が付かず更新要求も来ない）。更新済みの端末は、起動後に `X-Master-Update-Required` が付く応答で再び更新を試みる。仮置き |
 | 失敗の種類 | version の通信失敗・200 以外・本文不正、`master.tables` が空、ダウンロード失敗（HTTP 200 以外、書き込み失敗）はすべて `FAILED`。`needs_update` が偽なら `UP_TO_DATE` |
