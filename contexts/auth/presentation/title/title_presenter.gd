@@ -43,6 +43,7 @@ var _authenticate: AuthenticateUseCase
 var _login: LoginUseCase
 var _get_player_id: GetPlayerIdUseCase
 var _get_access_token: GetAccessTokenUseCase
+var _reverb_endpoint: ReverbEndpoint
 var _router: Object
 var _toast: Object
 var _is_configured: bool = false
@@ -59,6 +60,7 @@ func setup(
 	login: LoginUseCase,
 	get_player_id: GetPlayerIdUseCase,
 	get_access_token: GetAccessTokenUseCase,
+	reverb_endpoint: ReverbEndpoint,
 	router: Object,
 	toast: Object
 ) -> void:
@@ -67,6 +69,7 @@ func setup(
 	_login = login
 	_get_player_id = get_player_id
 	_get_access_token = get_access_token
+	_reverb_endpoint = reverb_endpoint
 	_router = router
 	_toast = toast
 	_is_configured = true
@@ -80,6 +83,7 @@ func _ready() -> void:
 			AppContext.login_use_case(),
 			AppContext.get_player_id_use_case(),
 			AppContext.get_access_token_use_case(),
+			AppContext.reverb_endpoint(),
 			SceneRouter,
 			Toast
 		)
@@ -185,7 +189,7 @@ func _run_login_stage() -> AppError:
 func _finish() -> void:
 	# リアルタイム通知（Reverb）は対象外の機能だが、旧実装と同じくここで始める。
 	# 接続できなくても画面の進行には影響しない（Toast 側が再接続を試みるだけ）
-	_toast.connect_to_reverb(_get_player_id.handle(), _get_access_token.handle())
+	_toast.connect_to_reverb(_get_player_id.handle(), _get_access_token.handle(), _reverb_endpoint)
 	_status_label.text = "ログイン成功!"
 	if success_hold_sec > 0.0:
 		await get_tree().create_timer(success_hold_sec).timeout

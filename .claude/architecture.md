@@ -82,7 +82,7 @@ presentation ──▶ domain ◀── data（domain の契約を実装する�
 | 層 | 置くもの |
 | --- | --- |
 | `core/domain/` | `Result`（成功/失敗の基底）、`AppError`（失敗の種別 `kind`・`error_code`・`message`・`retry_after`・メンテナンス情報）、`EventBus`、`JsonReader`（null と欠落を同一に扱う読み取り）。API クライアントから見た契約（トークンの供給 `ApiAuthProvider`〔refresh の送信は `ApiClient` が持つ〕、`master_hash` の供給 `MasterHashProvider`）もここに置き、実装は contexts が持つ。`EventBus` はオートロードで、`class_name` を付けない。依存チェック D2 は、`project.godot` の `[autoload]` に登録済みのオートロードだけ `core/domain` の Node 継承を許すので、登録しておく |
-| `core/data/` | `http/ApiClient`（HTTP の窓口。分類・401 の自動 refresh・冪等キー・`X-Master-*` ヘッダー）、`http/ApiResult`（通信結果の値）、`config/ApiConfig`（ベース URL と配信ホスト）、`storage/`（ファイル・設定の薄い入れ物） |
+| `core/data/` | `http/ApiClient`（HTTP の窓口。分類・401 の自動 refresh・冪等キー・`X-Master-*` ヘッダー）、`http/ApiResult`（通信結果の値）、`config/ApiConfig`（ベース URL・配信ホスト・Reverb の接続先と認証 URL。環境変数 `NEXUS_*` → `project.godot` の `[nexus]` → 既定値の順）、`storage/`（ファイル・設定の薄い入れ物） |
 | `core/presentation/` | `Toast`（オートロード）、ローディング、エラーダイアログなどの共通 UI。エラー種別ごとの表示文言の共通部分もここ |
 
 ### contexts/{context}
@@ -221,7 +221,7 @@ func sign_in(_device_id: String) -> Result:
 ### これからのルール
 
 - 新しい機能は最初から新構成で書く。`scenes/` や `scripts/` を作り直さない
-- 依存チェックは、新構成のコードが旧構成のパス（`scripts/` `scenes/`）を参照する（O1）のを検出する。旧構成のディレクトリは無いので、通常は何も出ない（再び置かれても検査対象外としてスキップされるだけで、新構成から参照すれば O1 で落ちる）
+- 旧構成のディレクトリ（`scripts/` `scenes/`）が戻ったときは、依存チェックでなく `make check-release`（`tools/prepare_release_project.py`）が、未分類のトップレベルとして失敗にして検出する（依存チェックは対象のディレクトリ以外を読まない。ルール O1 は廃止）
 - ファイルを動かす・改名するときは、`.gd` と `.gd.uid` を `git mv` で一緒に動かす（7 節）。動作を変えない移動だけの PR と、機能変更の PR は分ける
 - 状態をオートロードに持たせない。持ち主は各コンテキストの Repository 1 つ（2 節）
 
@@ -234,7 +234,7 @@ func sign_in(_device_id: String) -> Result:
 
 | 種類 | 内容 | 実行 |
 | --- | --- | --- |
-| 依存方向チェック | `tools/check_dependencies.py`（Python 標準ライブラリのみ）。`app/ core/ master_data/ contexts/ tests/ debug/` の `*.gd` を対象に、`preload` / `load` / `extends` の `res://` パス、`class_name` の使用、`[autoload]` 名の参照を読み、違反を `パス:行: [ID] 内容` で出して終了コード 1 にする。旧構成（`scripts/` `scenes/`）は削除済み。万一残っていても検査せず、スキップ数を表示する。抑止コメントは用意しない。単体テストは `tools/tests/` | `make check-deps` |
+| 依存方向チェック | `tools/check_dependencies.py`（Python 標準ライブラリのみ）。`app/ core/ master_data/ contexts/ tests/ debug/` の `*.gd` を対象に、`preload` / `load` / `extends` の `res://` パス、`class_name` の使用、`[autoload]` 名の参照を読み、違反を `パス:行: [ID] 内容` で出して終了コード 1 にする。対象外のトップディレクトリの `*.gd` は検査せず、「検査対象外 N ファイル」として数だけ表示する（`addons` `tools` `reports` `build` は走査しない）。抑止コメントは用意しない。単体テストは `tools/tests/` | `make check-deps` |
 | gdlint / gdformat | gdtoolkit 4.5.0（`tools/requirements.txt`、`.venv-tools/` に入れる）。設定は `.gdlintrc`（命名は 6 節と coding-standards.md のとおり snake_case / PascalCase）。対象は新構成のディレクトリだけ | `make lint` / `make format-check` / `make format` |
 | テスト | **GdUnit4**（v6.2.3。`addons/gdUnit4/` は git に入れず、`tools/install_gdunit4.sh` が版とコミット SHA を固定して取得する。`make setup-tools` / `make test` が自動で呼ぶ）。Godot 4.7 に対応し、CLI でヘッドレス実行と JUnit XML 出力ができるため採用。`tests/` に `contexts/` `master_data/` `core/` をミラーして置く。domain と UseCase は Repository の偽実装で単体テストを書く。結果は `reports/`（git 管理外） | `make test` / `make test-quiet` |
 
@@ -256,7 +256,7 @@ func sign_in(_device_id: String) -> Result:
 | N1 | 命名: `*_use_case.gd` は `domain/use_cases/`、`*_presenter.gd` は `presentation/`、`*_api_repository.gd` / `local_*_repository.gd` は `data/repositories/`、`*_response.gd` は `data/api/` にだけ置く。`class_name` はファイル名のパスカルケース（オートロード除く） |
 | Y1 | `preload` / `extends` のパスの循環 |
 | S1 | `core/` `master_data/` `contexts/<ctx>/` のファイルは presentation / domain / data のいずれかの下に置く |
-| O1 | 新構成のコードは旧構成（`scripts/` `scenes/`）を参照しない（旧構成は削除済み。戻さないための検査。8 節） |
+| O1 | 欠番（旧構成の参照を検出するルール。旧構成の削除に伴い廃止。ID は詰めない。8 節） |
 | T1 | 本番コード（app / core / master_data / contexts）は `tests/` `debug/` を参照しない |
 
 `app/`・`tests/`・`debug/` は参照の制限を受けない（`tests/` `debug/` は D2 以外の層の規則も対象外）。
@@ -282,3 +282,4 @@ func sign_in(_device_id: String) -> Result:
 - 401 は `ApiClient` が refresh して 1 回だけ再送する。refresh 失敗は `ApiClient` のシグナル `session_expired`（`AppContext` が `EventBus` へ中継）で知らせる
 - 変更を伴う認証付き POST（login・consent）には `X-Unique-Request-Identifier`（冪等キー）を付ける。キーの寿命は「ひとつの操作」で、持つのは presenter（操作の呼び出し元）
 - API のベース URL と配信ホストは `ApiConfig` の 1 か所
+- Reverb（WebSocket の通知）の接続先も `ApiConfig`（環境変数 `NEXUS_REVERB_HOST` / `_PORT` / `_SCHEME` / `_APP_KEY`、`[nexus]` の `reverb_host` / `reverb_port` / `reverb_scheme` / `reverb_app_key`、既定 `localhost` / `8080` / `ws` / `nexus-local-key`）。チャンネル認証の URL は API のベース URL の origin + `/broadcasting/auth`（設定は無い。Reverb のポートではなく API サーバーにある）。`Toast`（core/presentation）は `ApiConfig`（core/data）を参照できない（P1）ので、`AppContext.reverb_endpoint()` が作る `ReverbEndpoint`（`core/domain`）を presenter が `Toast.connect_to_reverb()` へ渡す

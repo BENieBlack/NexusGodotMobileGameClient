@@ -4,7 +4,8 @@
 
 - **ベースURL**: `http://localhost:8090/api`（開発環境）。マスターデータの配信ホストは `http://localhost:8091`
   - どちらも `core/data/config/api_config.gd`（`ApiConfig`）の 1 か所。環境変数 `NEXUS_API_BASE_URL` / `NEXUS_MASTER_BASE_URL`、または `project.godot` の `[nexus]` で変える
-  - ポート 8080 は API ではなく Reverb（WebSocket。`core/presentation/toast.gd`。この機能の対象外）
+  - ポート 8080 は API ではなく Reverb（WebSocket。`core/presentation/toast.gd`。この機能の対象外）。接続先は `ApiConfig` が決める: 環境変数 `NEXUS_REVERB_HOST` / `NEXUS_REVERB_PORT` / `NEXUS_REVERB_SCHEME`（`ws` / `wss`。`http` / `https` も可）/ `NEXUS_REVERB_APP_KEY`、または `[nexus]` の `reverb_host` / `reverb_port` / `reverb_scheme` / `reverb_app_key`（既定 `localhost` / `8080` / `ws` / `nexus-local-key`）
+  - private / presence チャンネルの認証（`POST /broadcasting/auth`）は Reverb ではなく **API サーバー**（:8090。`/api` の下ではない）にある。URL は API のベース URL の origin + `/broadcasting/auth`（`ApiConfig.broadcasting_auth_url()`）
 - **コンテンツタイプ**: `application/json`
 - **項目・エラーコードの正**: サーバーの `docs/design/title-to-home/api.md`。このファイルはクライアントの使い方の要点だけを書き、項目は複製しない
 

@@ -31,9 +31,13 @@ class FakeToast:
 	extends RefCounted
 	var toasts: Array[String] = []
 	var reverb_connects: Array[String] = []
+	var reverb_endpoints: Array[ReverbEndpoint] = []
 
 	func show_toast(title: String, _body: String, _type: String = "") -> void:
 		toasts.append(title)
 
-	func connect_to_reverb(user_id: String, _access_token: String) -> void:
+	func connect_to_reverb(
+		user_id: String, _access_token: String, endpoint: ReverbEndpoint
+	) -> void:
 		reverb_connects.append(user_id)
+		reverb_endpoints.append(endpoint)

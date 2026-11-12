@@ -88,12 +88,12 @@ class CleanTree(Case):
         self.write("debug/x.gd", "extends Node\nvar a = AppContext\n")
         self.assert_rules([])
 
-    def test_old_files_are_skipped_and_counted(self):
-        """前提: 旧構成（scripts/ scenes/）に、本来なら違反になる内容（HTTPRequest）を持つファイルが 2 つある。
-        期待: 違反は出ず、skipped が 2。移行期間中に旧構成を検査して大量の違反を出さないため。"""
+    def test_files_outside_check_dirs_are_skipped_and_counted(self):
+        """前提: 検査対象外のトップディレクトリ（other/ extra/）に、本来なら違反になる内容（HTTPRequest）を持つファイルが 2 つある。
+        期待: 違反は出ず、skipped が 2。対象外のディレクトリは検査せず、数だけ表示する。"""
         self.project()
-        self.write("scripts/a.gd", "class_name Old\nextends Node\nvar x = HTTPRequest\n")
-        self.write("scenes/b/b.gd", "extends Node\n")
+        self.write("other/a.gd", "class_name Other\nextends Node\nvar x = HTTPRequest\n")
+        self.write("extra/b/b.gd", "extends Node\n")
         report = cd.run_check(self.root)
         self.assertEqual([], report.violations)
         self.assertEqual(2, report.skipped)
@@ -327,12 +327,12 @@ class Rules(Case):
         self.write("core/loose.gd", "extends RefCounted\n")
         self.assert_rules(["S1"])
 
-    def test_o1_new_refs_old(self):
-        """前提: 新構成の core が、旧構成（scripts/）の class_name を参照する。
-        期待: O1。旧構成は検査しないが、新構成からの参照は検出する。"""
-        self.write("scripts/old.gd", "class_name OldThing\nextends RefCounted\n")
-        self.write("core/domain/x.gd", "extends RefCounted\nvar a: OldThing\n")
-        self.assert_rules(["O1"])
+    def test_ref_to_class_outside_check_dirs_is_ignored(self):
+        """前提: 新構成の core が、検査対象外のディレクトリ（other/）の class_name を参照する。
+        期待: 違反なし。参照先の層が決まらないので読み飛ばす（旧構成のルール O1 は廃止した）。"""
+        self.write("other/old.gd", "class_name OtherThing\nextends RefCounted\n")
+        self.write("core/domain/x.gd", "extends RefCounted\nvar a: OtherThing\n")
+        self.assert_rules([])
 
     def test_t1_production_refs_tests(self):
         """前提: 本番コード（core）が tests/ のクラスを参照する。 期待: T1。"""

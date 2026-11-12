@@ -45,6 +45,14 @@ enabled=PackedStringArray("res://addons/godot-sqlite/plugin.cfg", "res://addons/
 api_base_url="http://localhost:8090/api"
 master_base_url="http://localhost:8091"
 
+; Reverb（WebSocket の通知）の接続先の既定値（環境変数 NEXUS_REVERB_HOST / _PORT / _SCHEME / _APP_KEY が優先）。
+; アプリキーの既定値はローカル開発用。製品や他環境では NEXUS_REVERB_APP_KEY かここで上書きする
+; スキームは ws か wss。チャンネル認証の URL は api_base_url の origin + /broadcasting/auth（別の設定は無い）
+reverb_host="localhost"
+reverb_port="8080"
+reverb_scheme="ws"
+reverb_app_key="nexus-local-key"
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

@@ -13,7 +13,7 @@
 入出力と終了コード:
   入力  : --root 以下の *.gd と project.godot の [autoload]
   出力  : 違反を 1 行ずつ「パス:行: [ルールID] メッセージ」で標準出力に出し、
-          最後に「違反 N 件（検査 N ファイル、旧構成のためスキップ N ファイル）」を出す
+          最後に「違反 N 件（検査 N ファイル、検査対象外 N ファイル）」を出す
   終了  : 違反 0 件なら 0、1 件以上なら 1
 
 全体の流れ（run_check が上から順に行う）:
@@ -29,8 +29,11 @@
   7. 出力と終了コード: main が違反を整形して出し、違反があれば 1 を返す
 
 検査の範囲と読み方:
-  - 対象は新構成のディレクトリ（app/ core/ master_data/ contexts/ tests/ debug/）の *.gd だけ。
-    旧構成（scripts/ scenes/ など）は検査せず、スキップ数を表示する（移行期間のため。architecture.md 8 節）。
+  - 対象はディレクトリ（app/ core/ master_data/ contexts/ tests/ debug/）の *.gd だけ。
+    それ以外のトップディレクトリの *.gd は検査せず、検査対象外の数として表示する。
+    addons / tools / reports / build は走査自体をしない（SKIP_DIRS）。
+    旧構成（scripts/ scenes/）は削除済み。万一戻っても、製品用の複製を作る tools/prepare_release_project.py が
+    未分類のトップレベルとして失敗にする（make check-release。make check に含む）ので、ここでは検出しない。
   - 参照は 3 種類を読む: (1) preload / load / extends の res:// パス、
     (2) 全 .gd の class_name（識別子として現れたもの）、(3) project.godot の [autoload] 名。
   - コメントと文字列リテラルの中は参照として数えない（誤検出を避ける。パスの文字列だけは別に拾う）。
@@ -51,8 +54,8 @@
   Y1  preload の循環                                       （Godot は preload の循環を解決できない）
   補助（architecture.md の記述から追加したルール）:
   S1  層ディレクトリ（presentation / domain / data）の外に置かれたファイル （1 節 階層）
-  O1  新構成のコードが旧構成（scripts/ scenes/）を参照している （8 節 移行期間のルール）
   T1  本番コード（app/core/master_data/contexts）が tests/ debug/ を参照している （9 節）
+  （O1 は旧構成の参照を検出するルールだった。旧構成の削除に伴い廃止。ID は欠番のまま詰めない）
 
   L1 の背景: オートロードのスクリプトに class_name を付けると、Godot が
   "Class hides an autoload singleton" のエラーにする（シングルトン名とクラス名が衝突する）。
@@ -64,7 +67,7 @@ import re
 import sys
 from collections import namedtuple
 
-# 検査対象のトップディレクトリ。これ以外（旧構成の scripts/ scenes/ など）は検査せずスキップ数だけ数える
+# 検査対象のトップディレクトリ。これ以外のトップディレクトリの *.gd は検査せず、検査対象外の数だけ数える
 CHECK_DIRS = ("app", "core", "master_data", "contexts", "tests", "debug")
 # 3 層のディレクトリ名（architecture.md 1 節）。この下に置かれていれば「層が決まった」扱いになる
 LAYERS = ("presentation", "domain", "data")
@@ -74,8 +77,6 @@ FIXED_AUTOLOADS = ("AppContext", "SceneRouter", "Toast", "EventBus")
 # 走査しないディレクトリ（アドオン・生成物・ツール自身。隠しディレクトリは collect_files で別に除く）
 # build/ は make release-project が作る製品用の複製。元のコードの写しなので、走査すると class_name が二重に見える
 SKIP_DIRS = {"addons", "node_modules", "reports", "tools", "build"}
-# 旧構成のトップディレクトリ。移行期間中だけ存在し、検査せず O1 の参照先としてだけ使う
-OLD_DIRS = ("scripts", "scenes")
 
 # domain に置いてはならない継承元（Node 系）。D2 で extends の連鎖をたどって照合する。
 # 網羅は不可能なので、実際に使われうる主要なクラスを挙げている。足りなければここに足す
@@ -94,7 +95,7 @@ NODE_FAMILY = {
 ENGINE_IDENTIFIERS = ("HTTPRequest", "FileAccess", "DirAccess", "PackedScene", "SceneTree")
 
 # ファイルの置き場所。classify の戻り値。
-#   kind     : "app" / "core" / "master"（master_data）/ "contexts" / "tests" / "debug" / "old"（旧構成）
+#   kind     : "app" / "core" / "master"（master_data）/ "contexts" / "tests" / "debug"
 #   ctx      : contexts のときのコンテキスト名（contexts/<ctx>/...）。それ以外は None
 #   layer    : "presentation" / "domain" / "data"。層ディレクトリの外なら None
 #   use_cases: contexts の domain/use_cases/ 配下なら True（他コンテキストから参照してよい唯一の場所）
@@ -110,7 +111,7 @@ Ref = namedtuple("Ref", "line how label tgt tgt_path autoload")
 # 検出した違反 1 件。path は相対パス、line は 1 始まり、rule はルール ID（D1 など）
 Violation = namedtuple("Violation", "path line rule message")
 # run_check の戻り値。violations は Violation のリスト（path・行・ルール順）、
-# checked は検査したファイル数、skipped は旧構成などでスキップしたファイル数
+# checked は検査したファイル数、skipped は検査対象外のディレクトリにあるファイル数
 Report = namedtuple("Report", "violations checked skipped")
 
 
@@ -127,8 +128,6 @@ def classify(rel):
         return Loc("app", None, None, False)
     if top in ("tests", "debug"):
         return Loc(top, None, None, False)
-    if top in OLD_DIRS:
-        return Loc("old", None, None, False)
     if top in ("core", "master_data"):
         # core/<層>/... と master_data/<層>/...。層名の後ろにファイルが続く形（3 要素以上）だけ層とみなす
         kind = "core" if top == "core" else "master"
@@ -365,18 +364,20 @@ def extract_refs(info, classes, autoloads):
             if ("c", tgt_path) in seen:
                 continue
             seen.add(("c", tgt_path))
-            # class_name の定義ファイルが対象外の置き場所なら旧構成扱いにして O1 の対象にする
-            tgt = classify(tgt_path) or Loc("old", None, None, False)
+            # class_name の定義ファイルが検査対象外の置き場所なら、参照先の層が決まらないので読み飛ばす
+            tgt = classify(tgt_path)
+            if tgt is None:
+                continue
             result.append(Ref(info.line_of(m.start()), "class_name", name, tgt, tgt_path, False))
         elif name in autoloads or name in FIXED_AUTOLOADS:
             if name == own_autoload_name or ("a", name) in seen:
                 continue
             seen.add(("a", name))
             script = autoloads.get(name)  # FIXED_AUTOLOADS だけに載る名前は None
-            # スクリプト不明（project.godot に無い）なら app 扱い。パスが対象外の場所を指すなら旧構成扱い
-            tgt = (classify(script) if script else None) or Loc("app", None, None, False)
-            if script and classify(script) is None:
-                tgt = Loc("old", None, None, False)
+            # スクリプト不明（project.godot に無い）なら app 扱い。パスが検査対象外の場所を指すなら読み飛ばす
+            tgt = classify(script) if script else Loc("app", None, None, False)
+            if tgt is None:
+                continue
             result.append(Ref(info.line_of(m.start()), "autoload", name, tgt, script, True))
     return result
 
@@ -397,11 +398,6 @@ def check_ref(src, ref):
     arrow = "%s → %s" % (ref.label, ref.tgt_path or ref.label)
 
     # --- 1. 参照先の種別で決まるルール（層に関係なく禁止されるもの） ---
-    if tgt.kind == "old":
-        # 旧構成を参照してよいのは旧構成と app / tests / debug だけ（8 節）
-        if src.kind in ("core", "master", "contexts"):
-            res.append(("O1", "新構成のコードが旧構成を参照している: " + arrow))
-        return res
     if ref.autoload:
         # オートロード名を使ってよいのは core / contexts の presentation だけ（2 節 contexts / オートロード）
         if not (src.layer == "presentation" and src.kind in ("core", "contexts")):
@@ -574,7 +570,7 @@ def run_check(root):
     # --- 1. ファイル収集と解析 ---
     autoloads = read_autoloads(root)
     all_files = collect_files(root)
-    # 旧構成も含めて全 .gd を読む。class_name の参照先に旧構成があっても解決でき、O1 を検出できる
+    # 検査対象外のディレクトリも含めて全 .gd を読む（class_name の参照先を解決するため）
     infos = {}
     for rel in all_files:
         with open(os.path.join(root, rel), encoding="utf-8", errors="replace") as f:
@@ -627,7 +623,7 @@ def run_check(root):
         if loc.layer == "domain" and loc.kind in ("core", "master", "contexts") and not is_autoload:
             for line, msg in engine_violations(info, infos, classes):
                 add(rel, line, "D2", msg, msg)
-        # 参照ごとのルール（D1・P1・P2・Da1・X1・M1・M2・C1・A1・O1・T1）と、D2 の .tscn
+        # 参照ごとのルール（D1・P1・P2・Da1・X1・M1・M2・C1・A1・T1）と、D2 の .tscn
         for ref in extract_refs(info, classes, autoloads):
             if loc.layer == "domain" and ref.tgt_path and ref.tgt_path.endswith(".tscn") and not ref.autoload:
                 # シーンへの依存は、Node を継承しなくてもエンジン依存になる（2 節 domain）
@@ -666,7 +662,7 @@ def main(argv=None):
     # 形式は「パス:行: [ルールID] メッセージ」。エディタや CI のログからジャンプしやすい
     for v in report.violations:
         print("%s:%d: [%s] %s" % (v.path, v.line, v.rule, v.message))
-    print("違反 %d 件（検査 %d ファイル、旧構成のためスキップ %d ファイル）"
+    print("違反 %d 件（検査 %d ファイル、検査対象外 %d ファイル）"
           % (len(report.violations), report.checked, report.skipped))
     return 1 if report.violations else 0
 

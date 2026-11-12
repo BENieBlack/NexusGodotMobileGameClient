@@ -2,10 +2,11 @@
 ##
 ## 目的: 画面の上に出る通知（トースト）を 1 か所で出す。サーバーからの通知（WebSocket）を受けて出す役目もある。
 ##       旧 ToastManager の責務を移したもので、Reverb への接続と `/broadcasting/auth` は今回の機能の対象外
-##       （要件）なので、挙動は変えていない（URL は旧のまま。client_design.md 2-1）。
+##       （要件）なので、挙動は変えていない。接続先と認証先の URL は ReverbEndpoint で受け取る
+##       （値は ApiConfig が環境変数 / [nexus] / 既定値から決める。core/presentation は core/data を参照できないため）。
 ## 使い方:
 ##   Toast.show_toast(title, body, type)             トーストを出す（キューに積んで順に出す）
-##   Toast.connect_to_reverb(user_id, access_token)  login 成功後にタイトルが呼ぶ。通知の購読を始める
+##   Toast.connect_to_reverb(user_id, access_token, endpoint)  login 成功後にタイトルが呼ぶ。通知の購読を始める
 ##   Toast.disconnect_from_reverb()                  切断する（セッションが無効になったときは自動で呼ばれる）
 ## 旧との違い（UserDataManager の廃止に伴う）:
 ##   - プレイヤー ID とアクセストークンは、旧は UserDataManager から読んでいたが、connect_to_reverb の引数で
@@ -18,8 +19,6 @@ extends Node
 # ============================================================
 # 定数
 # ============================================================
-const WS_URL = "ws://localhost:8080/app/nexus-key"
-const AUTH_ENDPOINT = "/broadcasting/auth"
 const PING_TIMEOUT_SEC = 35.0  # ping未到達でタイムアウトとみなす秒数
 const RECONNECT_DELAY_SEC = 3.0  # 再接続待機秒数
 const MAX_RECONNECT_ATTEMPTS = 5  # 最大再接続試行回数
@@ -78,7 +77,8 @@ var _body_label: Label = null
 # チャンネル認証用の一時 HTTPRequest
 var _auth_http: HTTPRequest = null
 
-# connect_to_reverb で受け取った、チャンネル認証に使うプレイヤー ID とアクセストークン
+# connect_to_reverb で受け取った、チャンネル認証に使うプレイヤー ID とアクセストークン、接続先と認証先
+var _endpoint: ReverbEndpoint = null
 var _user_id: String = ""
 var _access_token: String = ""
 
@@ -134,9 +134,14 @@ func _process(delta: float) -> void:
 
 ## Reverb への接続を開始する（ログイン完了後に呼ぶ）。
 ## 引数: user_id は private-notification.<user_id> のチャンネル名に、access_token は認証 API の Bearer に使う。
-func connect_to_reverb(user_id: String, access_token: String) -> void:
+## endpoint は WebSocket の接続先と認証 URL（ApiConfig.reverb_endpoint() を AppContext 経由で受け取る）。
+func connect_to_reverb(user_id: String, access_token: String, endpoint: ReverbEndpoint) -> void:
+	if endpoint == null:
+		print("[Toast] Reverb の接続先が渡されていないため接続しません")
+		return
 	_user_id = user_id
 	_access_token = access_token
+	_endpoint = endpoint
 	_reconnect_attempts = 0
 	_do_connect()
 
@@ -180,15 +185,10 @@ func subscribe_guild(guild_id: int) -> void:
 			_on_guild_auth_completed(result, code, body, channel_name, auth_http)
 	)
 
-	var url = "http://localhost:8080/broadcasting/auth"
-	var headers = PackedStringArray(
-		[
-			"Content-Type: application/json",
-			"Accept: application/json",
-			"Authorization: Bearer " + _access_token
-		]
-	)
-	var body = JSON.stringify({"socket_id": _socket_id, "channel_name": channel_name})
+	var request = _build_auth_request(channel_name)
+	var url: String = request["url"]
+	var headers: PackedStringArray = request["headers"]
+	var body: String = request["body"]
 	auth_http.request(url, headers, HTTPClient.METHOD_POST, body)
 
 
@@ -213,12 +213,12 @@ func _do_connect() -> void:
 	_ping_timer = 0.0
 
 	_ws = WebSocketPeer.new()
-	var err = _ws.connect_to_url(WS_URL)
+	var err = _ws.connect_to_url(_endpoint.ws_url)
 	if err != OK:
 		print("[Toast] WebSocket 接続失敗: ", err)
 		_handle_disconnect()
 		return
-	print("[Toast] WebSocket 接続中: ", WS_URL)
+	print("[Toast] WebSocket 接続中: ", _endpoint.ws_url)
 
 
 func _handle_disconnect() -> void:
@@ -304,18 +304,30 @@ func _authenticate_channel() -> void:
 		func(result, code, _headers, body): _on_auth_completed(result, code, body, channel_name)
 	)
 
-	var url = "http://localhost:8080/broadcasting/auth"
-	var headers = PackedStringArray(
-		[
-			"Content-Type: application/json",
-			"Accept: application/json",
-			"Authorization: Bearer " + _access_token
-		]
-	)
-	var body = JSON.stringify({"socket_id": _socket_id, "channel_name": channel_name})
+	var request = _build_auth_request(channel_name)
+	var url: String = request["url"]
+	var headers: PackedStringArray = request["headers"]
+	var body: String = request["body"]
 
 	print("[Toast] チャンネル認証リクエスト送信: ", channel_name)
 	_auth_http.request(url, headers, HTTPClient.METHOD_POST, body)
+
+
+## チャンネル認証の POST の組み立て（送信はしない）。url は endpoint の auth_url、
+## ヘッダーはアクセストークンの Bearer、本文は socket_id とチャンネル名。
+func _build_auth_request(channel_name: String) -> Dictionary:
+	return {
+		"url": _endpoint.auth_url,
+		"headers":
+		PackedStringArray(
+			[
+				"Content-Type: application/json",
+				"Accept: application/json",
+				"Authorization: Bearer " + _access_token
+			]
+		),
+		"body": JSON.stringify({"socket_id": _socket_id, "channel_name": channel_name}),
+	}
 
 
 func _on_auth_completed(

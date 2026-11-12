@@ -98,6 +98,12 @@ func get_access_token_use_case() -> GetAccessTokenUseCase:
 	return _get_access_token_use_case
 
 
+## Reverb の接続先と認証先（Toast へ渡す。ApiConfig の設定から呼ぶたびに作る。通信はしない）。
+## core/presentation の Toast は ApiConfig（core/data）を参照できないので、presenter がここから受け取って渡す。
+func reverb_endpoint() -> ReverbEndpoint:
+	return ApiConfig.reverb_endpoint()
+
+
 func apply_login_data_use_case() -> ApplyLoginDataUseCase:
 	return _apply_login_data_use_case
 

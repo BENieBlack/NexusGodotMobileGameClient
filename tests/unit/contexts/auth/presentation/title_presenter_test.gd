@@ -14,6 +14,7 @@ var _auth_repository: FakeAuthRepository
 var _login: SequencedLogin
 var _router: ScreenTestDoubles.FakeRouter
 var _toast: ScreenTestDoubles.FakeToast
+var _reverb_endpoint: ReverbEndpoint
 var _tokens: FakeApiClient.FakeAuth
 var _title: TitlePresenter
 
@@ -39,6 +40,9 @@ func before_test() -> void:
 	_login = SequencedLogin.new()
 	_router = ScreenTestDoubles.FakeRouter.new()
 	_toast = ScreenTestDoubles.FakeToast.new()
+	_reverb_endpoint = ReverbEndpoint.new(
+		"ws://reverb.test/app/k", "http://api.test/broadcasting/auth"
+	)
 	_tokens = FakeApiClient.FakeAuth.new()
 
 
@@ -58,6 +62,7 @@ func _start_title(tokens: FakeApiClient.FakeAuth = null) -> void:
 		LoginUseCase.new(_login, LocalLoginBonusRepository.new(), apply),
 		GetPlayerIdUseCase.new(players),
 		GetAccessTokenUseCase.new(tokens),
+		_reverb_endpoint,
 		_router,
 		_toast
 	)
@@ -91,6 +96,8 @@ func test_all_success_goes_to_agreement() -> void:
 	assert_str(_status()).is_equal("ログイン成功!")
 	assert_bool(_retry().visible).is_false()
 	assert_array(_toast.reverb_connects).contains_exactly(["p1"])
+	# 接続先は presenter が受け取ったものがそのまま Toast へ渡る
+	assert_object(_toast.reverb_endpoints[0]).is_same(_reverb_endpoint)
 	assert_int(_login.keys.size()).is_equal(1)
 
 

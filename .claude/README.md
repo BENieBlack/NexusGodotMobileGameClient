@@ -127,6 +127,8 @@ Godot 4 でこのディレクトリを開いてください。
 1. 環境変数 `NEXUS_API_BASE_URL` / `NEXUS_MASTER_BASE_URL`
 2. `project.godot` の `[nexus]` セクション（`api_base_url` / `master_base_url`）
 
+Reverb（通知の WebSocket）の接続先も同じ順で決まります（環境変数 `NEXUS_REVERB_HOST` / `NEXUS_REVERB_PORT` / `NEXUS_REVERB_SCHEME` / `NEXUS_REVERB_APP_KEY`、`[nexus]` の `reverb_host` / `reverb_port` / `reverb_scheme` / `reverb_app_key`）。チャンネル認証の URL は API のベース URL から決まります。アプリキーの既定値（`nexus-local-key`）はローカル開発用なので、製品や他環境では `NEXUS_REVERB_APP_KEY` か `[nexus]` の `reverb_app_key` で上書きします。
+
 ### 4. 通しの動作確認（e2e ドライバー）
 
 人の操作なしで「タイトル → 認証 → login → 規約 → ログインボーナス → ホーム」を最後まで動かせます（`debug/e2e_driver.gd`。`--e2e` 系の引数が無ければ何もしません）。
