@@ -233,6 +233,8 @@ overview の「保存済みトークンの有無で最初に呼ぶ API を決め
 
 401・429・503（メンテ）は `error_code` を持たない。299 だけが `error_code` を見る（現行の「299 だけ見る」と同じで、そこに 429 / 503 / 409 の分類を足す）。
 
+- HTTP 2xx（299 を除く）の本文が空の配列 `[]`（または空本文）は、`options.allow_empty_body = true` のときだけ空の辞書として成功扱いにする（**consent のみ指定**。サーバーは項目の無い成功を `[]` で返す）。既定では `PARSE`（プロキシなどの空の 200 を login が成功と誤認しないため）。要素のある配列は常に `PARSE`。299 の本文は従来どおり辞書が必要。
+
 **X-Master-Hash**: `ApiClient` は**すべてのリクエスト**に、`master_data/` の保持する `master_hash`（core の契約経由）が空でなければ付ける（現行は AuthService の sign_up / sign_in と refresh に付いていなかったが、統一する。サーバーは全 API で受け付ける）。サーバーは HTTP 200 の応答にだけ `X-Master-Update-Required: true` を付ける（299・4xx・5xx には付かない）。
 
 **X-Master-Update-Required の扱い**: 200 の応答にあれば `ApiClient` のシグナル `master_update_required`（`AppContext` が `EventBus` へ中継）を出して**待たずに結果を返す**。`master_data/` がシグナルを受け（`AppContext` が登録）、`CheckMasterDataUseCase` を**裏で 1 本だけ**実行する（実行中フラグ。実行中の通知は無視）。起動時（タイトルの MASTER 段階）に更新済みなので、起動直後に付くのは起動中にサーバーが更新されたときだけ。version GET 自体の応答に付いた場合は無視する（更新判定は本文の `needs_update` で足りる）。更新が終わると DB を切り替える（`master_data_loaded`）。

@@ -1,0 +1,192 @@
+## 依存の組み立て（合成ルート。architecture.md 3 節 app、client_design.md 2-1）。
+##
+## 目的: ApiClient・各 Repository の実装・UseCase を生成して結ぶ唯一の場所。presenter（第 3 段）は
+##       オートロード名 AppContext の取得メソッド（login_use_case() など）で UseCase だけを受け取る。
+##       また、ApiClient の 2 つのシグナルを EventBus へ中継し、EventBus の受け手を登録する。
+## 注意:
+##   - オートロード用のスクリプトなので class_name を付けない（付けるとオートロード名と衝突する。依存チェック L1）。
+##     現段階では project.godot に登録していない（登録とオートロードの切り替えは第 3 段）。テストは
+##     load("res://app/app_context.gd").new() で Node として生成し、add_child する。
+##   - _ready では他のオートロードを呼ばない。EventBus は購読の登録（connect）と、ApiClient のシグナルを
+##     EventBus のシグナルへつなぐことだけ。通信・遷移・Toast は呼ばない（起動順序に依存しないため）
+## 組み立ての流れ（_ready）:
+##   1. 保存の窓口を作る（トークン = LocalAuthTokenRepository、マスター = LocalMasterDataRepository）
+##   2. ApiClient を 1 つ作って add_child し、configure(トークンの供給元, マスターハッシュの供給元) する
+##      （マスターの保存実装は MasterHashProvider を兼ねるので、同じ 1 つを渡す = 状態の持ち主は 1 つ）
+##   3. API Repository・メモリの Repository・UseCase を作る
+##   4. ApiClient のシグナルを EventBus へ中継し、EventBus の受け手を登録する（下記）
+## 受け手（architecture.md 5 節 8）:
+##   - EventBus.session_expired        → auth（トークン）・player（所持データ）・login（ログインボーナス）を空にする。
+##                                        master_data は受けない（マスターは端末のもので、アカウントに依存しない）
+##   - EventBus.master_update_required → master_data が CheckMasterDataUseCase を裏で呼ぶ（待たない。
+##                                        実行中の重複は UseCase が 1 本にまとめる）
+## テスト: storage_root を add_child の前に差し替えると、保存先（トークン・device_id・マスター）を
+##   実機の user:// から外せる。
+extends Node
+
+## 保存先のルート。既定は実機の user://。add_child の前に差し替えられる（テスト・検証用）
+var storage_root: String = "user://"
+
+var _api_client: ApiClient
+
+# --- master_data ---
+var _master_database: MasterDatabase
+var _master_storage: LocalMasterDataRepository
+var _check_master_data_use_case: CheckMasterDataUseCase
+var _master_unit_repository: MasterUnitRepository
+var _master_equipment_repository: MasterEquipmentRepository
+var _master_gacha_repository: MasterGachaRepository
+
+# --- auth ---
+var _auth_token_repository: LocalAuthTokenRepository
+var _authenticate_use_case: AuthenticateUseCase
+var _clear_auth_session_use_case: ClearAuthSessionUseCase
+
+# --- player ---
+var _player_repository: PlayerRepository
+var _apply_login_data_use_case: ApplyLoginDataUseCase
+
+# --- login ---
+var _login_bonus_repository: LoginBonusRepository
+var _login_use_case: LoginUseCase
+
+# --- agreement ---
+var _fetch_pending_agreements_use_case: FetchPendingAgreementsUseCase
+var _consent_agreement_use_case: ConsentAgreementUseCase
+
+
+func _ready() -> void:
+	_build()
+	_register_event_bus()
+
+
+func _exit_tree() -> void:
+	# EventBus はオートロードで長生きするので、受け手の登録を外す（解放済みの自分を呼ばせない）
+	if EventBus.session_expired.is_connected(_on_session_expired):
+		EventBus.session_expired.disconnect(_on_session_expired)
+	if EventBus.master_update_required.is_connected(_on_master_update_required):
+		EventBus.master_update_required.disconnect(_on_master_update_required)
+	# SQLite の接続を閉じる（開いたままにしない）
+	if _master_database != null:
+		_master_database.close_all()
+
+
+# --- 取得メソッド（presenter が UseCase を受け取る窓口） ---
+
+
+func api_client() -> ApiClient:
+	return _api_client
+
+
+func check_master_data_use_case() -> CheckMasterDataUseCase:
+	return _check_master_data_use_case
+
+
+func authenticate_use_case() -> AuthenticateUseCase:
+	return _authenticate_use_case
+
+
+func clear_auth_session_use_case() -> ClearAuthSessionUseCase:
+	return _clear_auth_session_use_case
+
+
+func apply_login_data_use_case() -> ApplyLoginDataUseCase:
+	return _apply_login_data_use_case
+
+
+func login_use_case() -> LoginUseCase:
+	return _login_use_case
+
+
+func fetch_pending_agreements_use_case() -> FetchPendingAgreementsUseCase:
+	return _fetch_pending_agreements_use_case
+
+
+func consent_agreement_use_case() -> ConsentAgreementUseCase:
+	return _consent_agreement_use_case
+
+
+# --- mst の Repository（master_data。読み取りのみ。各コンテキストの UseCase が使う） ---
+
+
+func master_unit_repository() -> MasterUnitRepository:
+	return _master_unit_repository
+
+
+func master_equipment_repository() -> MasterEquipmentRepository:
+	return _master_equipment_repository
+
+
+func master_gacha_repository() -> MasterGachaRepository:
+	return _master_gacha_repository
+
+
+# --- 組み立て ---
+
+
+## 依存を作って結ぶ。_ready から 1 回だけ呼ぶ。
+func _build() -> void:
+	var root := storage_root if storage_root.ends_with("/") else storage_root + "/"
+
+	# --- 1. 保存の窓口 ---
+	_auth_token_repository = LocalAuthTokenRepository.new(root)
+	_master_database = MasterDatabase.new()
+	_master_storage = LocalMasterDataRepository.new(
+		_master_database, root + "master/", root + "master_state.json"
+	)
+	# 保存済みの更新 DB（無ければ同梱 DB）を開く。開けなくても起動は続ける（マスターを使う画面だけ空になる）
+	if not _master_storage.initialize():
+		push_warning("マスターデータの DB を開けませんでした")
+
+	# --- 2. ApiClient ---
+	_api_client = ApiClient.new()
+	add_child(_api_client)
+	_api_client.configure(_auth_token_repository, _master_storage)
+
+	# --- 3. Repository と UseCase ---
+	# master_data
+	var master_remote := MasterDataApiRepository.new(_api_client)
+	_check_master_data_use_case = CheckMasterDataUseCase.new(master_remote, _master_storage)
+	_master_unit_repository = LocalMasterUnitRepository.new(_master_database)
+	_master_equipment_repository = LocalMasterEquipmentRepository.new(_master_database)
+	_master_gacha_repository = LocalMasterGachaRepository.new(_master_database)
+	# auth
+	var auth_repository := AuthApiRepository.new(_api_client, _auth_token_repository)
+	_authenticate_use_case = AuthenticateUseCase.new(auth_repository, _auth_token_repository)
+	_clear_auth_session_use_case = ClearAuthSessionUseCase.new(_auth_token_repository)
+	# player
+	_player_repository = LocalPlayerRepository.new()
+	_apply_login_data_use_case = ApplyLoginDataUseCase.new(_player_repository)
+	# login
+	_login_bonus_repository = LocalLoginBonusRepository.new()
+	_login_use_case = LoginUseCase.new(
+		LoginApiRepository.new(_api_client), _login_bonus_repository, _apply_login_data_use_case
+	)
+	# agreement
+	var agreement_repository := AgreementApiRepository.new(_api_client)
+	_fetch_pending_agreements_use_case = FetchPendingAgreementsUseCase.new(agreement_repository)
+	_consent_agreement_use_case = ConsentAgreementUseCase.new(agreement_repository)
+
+
+## ApiClient のシグナルを EventBus へ中継し、EventBus の受け手を登録する。
+## 中継する理由: core/data（ApiClient）はオートロード名を参照できない（依存チェック A1）ので、
+## ApiClient は自分のシグナルを出すだけにし、EventBus に載せ替えるのはここ（app）の役目。
+func _register_event_bus() -> void:
+	_api_client.session_expired.connect(EventBus.session_expired.emit)
+	_api_client.master_update_required.connect(EventBus.master_update_required.emit)
+	EventBus.session_expired.connect(_on_session_expired)
+	EventBus.master_update_required.connect(_on_master_update_required)
+
+
+## セッションが無効になった。トークン・所持データ・ログインボーナスを空にする。
+## master_hash と deploy_id（master_data の持ち物）は消さない。
+func _on_session_expired() -> void:
+	_clear_auth_session_use_case.handle()
+	_player_repository.clear()
+	_login_bonus_repository.clear()
+
+
+## サーバーのマスターが更新された。master_data の同期を裏で 1 本だけ走らせる（待たない）。
+## 実行中の重複は CheckMasterDataUseCase が IN_PROGRESS で断り、終了後に 1 回だけ再実行する。
+func _on_master_update_required() -> void:
+	_check_master_data_use_case.handle()

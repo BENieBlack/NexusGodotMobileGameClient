@@ -13,6 +13,7 @@
 ##      {}, {"auth": false})`
 ##      options: auth（既定 true。false なら Authorization を付けず、401 でも refresh しない）、
 ##               idempotency_key（付ける冪等キー）、extra_headers（PackedStringArray）、
+##               allow_empty_body（既定 false。true なら 2xx の空本文・空配列 `[]` を空の辞書で成功扱い）、
 ##               timeout（秒。既定 DEFAULT_TIMEOUT）
 ##   3. 失敗は例外にせず ApiResult（ok = false）で返す。分類は api_result.gd のとおり
 ##
@@ -201,7 +202,7 @@ func _send(method: String, endpoint: String, body: Dictionary, options: Dictiona
 	var response := await _send_http(
 		method, ApiConfig.api_base_url() + endpoint, headers, body_string, timeout
 	)
-	var result := _classify(response, use_auth)
+	var result := _classify(response, use_auth, bool(options.get("allow_empty_body", false)))
 
 	# マスターの更新要求は、サーバーが HTTP 200 の応答にだけ付ける（299・4xx・5xx には付かない）。
 	# version 自体の応答は本文の needs_update で判定できるので無視する。待たずに結果を返す
@@ -236,7 +237,7 @@ func _build_headers(
 ## HTTP の結果を ApiResult に分類する（client_design.md 3-5 の判定の順）。
 ## 1. 通信自体の失敗 → NETWORK  2. 401  3. 429  4. 503  5. 409  6. 299  7. 422・その他の非 2xx
 ## 8. 2xx で本文が JSON(Dictionary) でない → PARSE。401・429・503（メンテ）は error_code を持たない。
-func _classify(response: Dictionary, use_auth: bool) -> ApiResult:
+func _classify(response: Dictionary, use_auth: bool, allow_empty_body: bool = false) -> ApiResult:
 	var result_code: int = response.get("result", HTTPRequest.RESULT_CANT_CONNECT)
 	if result_code != HTTPRequest.RESULT_SUCCESS:
 		return ApiResult.make_error(AppError.Kind.NETWORK)
@@ -247,8 +248,24 @@ func _classify(response: Dictionary, use_auth: bool) -> ApiResult:
 
 	# 本文は 1 度だけ読む。読めない・Dictionary でないときは parsed = false（失敗系では空の辞書で続ける）
 	var json := JSON.new()
-	var parsed := json.parse(body.get_string_from_utf8()) == OK and json.data is Dictionary
-	var data: Dictionary = json.data if parsed else {}
+	var text := body.get_string_from_utf8()
+	var parsed := json.parse(text) == OK and json.data is Dictionary
+	# サーバーは「返す項目が無い」成功（consent など）を `[]` で返す（PHP の空配列は JSON の配列になるため）。
+	# 空の配列・空の本文は、呼び出し側が options の allow_empty_body で許したとき、HTTP 2xx（299 を除く）に
+	# 限り「空の辞書」として成功扱いにする。既定では許さない: プロキシなどが返した空の 200 を login が
+	# 成功と誤認し、player とログインボーナスを空で置き換えてしまうのを防ぐため（consent だけが指定する）。
+	# 要素のある配列は許可の有無にかかわらず PARSE。299（業務エラー）は error_code を読むので辞書が必須
+	if (
+		allow_empty_body
+		and not parsed
+		and status >= 200
+		and status < 300
+		and status != HTTP_BUSINESS_ERROR
+	):
+		if text.strip_edges() == "" or (json.parse(text) == OK and json.data == []):
+			parsed = true
+	# 空の配列・空本文で成功扱いにした場合も、data は空の辞書になる
+	var data: Dictionary = json.data if json.data is Dictionary and parsed else {}
 	var server_message := str(data.get("message", ""))
 
 	var result: ApiResult

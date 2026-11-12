@@ -75,6 +75,41 @@ func test_success_returns_data() -> void:
 	assert_int(int(result.data["a"])).is_equal(1)
 
 
+## 前提: 200 で本文が空の配列 `[]` または空本文（既定の options）。
+## 期待: PARSE（プロキシなどの空の 200 を成功と誤認しない）。
+func test_empty_array_or_body_is_parse_error_by_default() -> void:
+	for body in ["[]", ""]:
+		_client.handler = func(_m, _u, _h, _b): return FakeApiClient.response(200, body)
+		var result := await _client.request("POST", "/x")
+		assert_bool(result.ok).is_false()
+		assert_int(result.kind).is_equal(AppError.Kind.PARSE)
+
+
+## 前提: allow_empty_body = true で、200 + `[]`（サーバーは項目の無い成功をこう返す。consent）と空本文。
+## 期待: ok で data は空の辞書。
+func test_allow_empty_body_accepts_empty_array_and_empty_body() -> void:
+	for body in ["[]", ""]:
+		_client.handler = func(_m, _u, _h, _b): return FakeApiClient.response(200, body)
+		var result := await _client.request("POST", "/x", {}, {"allow_empty_body": true})
+		assert_bool(result.ok).is_true()
+		assert_dict(result.data).is_empty()
+
+
+## 前提: 200 で要素のある配列 `[1]`。期待: 許可の有無にかかわらず PARSE。
+func test_non_empty_array_is_parse_error() -> void:
+	_client.handler = func(_m, _u, _h, _b): return FakeApiClient.response(200, "[1]")
+	for options in [{}, {"allow_empty_body": true}]:
+		var result := await _client.request("POST", "/x", {}, options)
+		assert_int(result.kind).is_equal(AppError.Kind.PARSE)
+
+
+## 前提: 299 で本文が `[]`。期待: 従来どおり PARSE（業務エラーは error_code を読むので辞書が必須）。
+func test_business_error_with_empty_array_is_parse_error() -> void:
+	_client.handler = func(_m, _u, _h, _b): return FakeApiClient.response(299, "[]")
+	var result := await _client.request("POST", "/x", {}, {"allow_empty_body": true})
+	assert_int(result.kind).is_equal(AppError.Kind.PARSE)
+
+
 ## 前提: 通信自体が失敗。操作: request。期待: NETWORK。
 func test_network_failure() -> void:
 	_client.handler = func(_m, _u, _h, _b): return FakeApiClient.network_error()
