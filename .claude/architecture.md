@@ -30,7 +30,7 @@ res://
 │   │   ├── presentation/         #   title/（*.tscn と *_presenter.gd）
 │   │   ├── domain/               #   entities/, use_cases/, repositories/（契約の基底クラス）
 │   │   └── data/                 #   api/（呼び出しと応答の型）, local/（保存）, repositories/（契約の実装）
-│   ├── agreement/                # 規約の取得・同意、規約画面
+│   ├── agreement/                # 規約の取得・同意・本文の閲覧、規約画面と閲覧画面
 │   ├── login/                    # POST /auth/login、ログインボーナス画面
 │   ├── player/                   # プレイヤーと所持データの読み取りモデル、ホーム画面
 │   └── （今後: gacha / unit / equipment …）
@@ -266,7 +266,8 @@ func sign_in(_device_id: String) -> Result:
 | 画面 | シーン | 説明 |
 | --- | --- | --- |
 | タイトル | `contexts/auth/presentation/title/title.tscn` | version 確認 → 認証 → login |
-| 規約 | `contexts/agreement/presentation/agreement/agreement.tscn` | 未同意の規約があるときだけ表示。同意を送る |
+| 規約 | `contexts/agreement/presentation/agreement/agreement.tscn` | 未同意の規約があるときだけ表示。同意を送る。「確認する」で下の閲覧画面を重ねて開く |
+| 規約の閲覧 | `contexts/agreement/presentation/terms_viewer/terms_viewer.tscn` | 規約画面の上に重ねる全画面。規約の URL から HTML を取得し（`FetchAgreementDocumentUseCase`）、`HtmlToBbcode` で BBCode にして `RichTextLabel` に描く。状態は読み込み中 / 表示 / エラー（再試行・ブラウザで開く）。遷移ではなく、閉じると規約画面に戻る |
 | ログインボーナス | `contexts/login/presentation/login_bonus/login_bonus.tscn` | login の結果を表示する（通信しない） |
 | ホーム | `contexts/player/presentation/home/home.tscn` | メインメニュー |
 | API テスト | `debug/api_test/api_test.tscn` | デバッグ用（タイトル・ホームからは開けない。直接開く） |

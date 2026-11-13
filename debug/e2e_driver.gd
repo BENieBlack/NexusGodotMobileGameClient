@@ -24,6 +24,8 @@
 ##   --e2e-dwell=<秒>       画面の操作とエラー表示の再試行の前に止まる秒数（既定 0。録画で画面・エラー文を読めるようにする。
 ##                          エラーは表示されてから dwell 秒たつまで再試行を押さない。失敗が続いても毎回見える。
 ##                          429 は dwell と、再試行ボタンが有効になるまでの両方を待つ）
+##   --e2e-view-terms       規約画面で、最初の規約の「確認する」を押して閲覧画面を開き、dwell 秒止まる →
+##                          本文を数回スクロールして下を見せる → 「閉じる」を押す → 既存どおり同意ボタンへ（動画用）
 ##   --e2e-timeout=<秒>     この秒数で打ち切る（既定 120。コード 1）
 ## クリックの送り方: 実際のマウス操作に近づけ、移動 → 押下 → 数フレーム → 解放の順に送る（動画で押下の
 ##   見た目が出る）。座標はビューポート座標で指定し、ウィンドウ座標へ変換して送る（下の make_* と
@@ -34,6 +36,9 @@
 ## 出力: `E2E: ...` の行に経過、最後に `E2E_RESULT: OK ...`（コード 0）か `E2E_RESULT: TIMEOUT ...`（コード 1）。
 ##       トークン・秘密鍵・device_id は出さない。
 extends Node
+
+## 規約の閲覧の操作の段階（--e2e-view-terms）
+enum TermsPhase { OPEN, VIEWING, SCROLLING, CLOSING, DONE }
 
 ## 画面が出てから操作するまでの待ち（秒。録画で表示が見えるように）
 const ACTION_DELAY := 1.5
@@ -49,6 +54,16 @@ const TITLE_STATUS_PATH := "CenterContainer/PanelContainer/VBoxContainer/StatusL
 const AGREEMENT_RETRY_PATH := "VBoxContainer/RetryButton"
 const AGREEMENT_AGREE_PATH := "VBoxContainer/AgreeAllButton"
 const AGREEMENT_STATUS_PATH := "VBoxContainer/StatusLabel"
+const AGREEMENT_LIST_PATH := "VBoxContainer/ScrollContainer/AgreementList"
+## 規約画面の上に重なる閲覧画面（ノード名と中の部品。terms_viewer.tscn）
+const TERMS_VIEWER_NAME := "TermsViewer"
+const TERMS_BODY_PATH := "VBoxContainer/BodyLabel"
+const TERMS_STATUS_PATH := "VBoxContainer/StatusLabel"
+const TERMS_CLOSE_PATH := "VBoxContainer/CloseButton"
+## 閲覧画面で本文を進める回数と間隔（秒）、1 回に進める量（表示領域の高さに対する割合）
+const TERMS_SCROLL_STEPS := 4
+const TERMS_SCROLL_INTERVAL := 0.6
+const TERMS_SCROLL_RATIO := 0.6
 
 ## 引数の辞書（キーは "e2e-reset" のように先頭の -- を除いた名前。値の無いものは true）
 var _args: Dictionary = {}
@@ -73,6 +88,10 @@ var _shot_keys: Dictionary = {}
 var _shot_count: int = 0
 ## トークンを不正値にしたか。1 回だけにする（毎回壊すと、タイトルへ戻って復旧しても再び壊して無限に戻る）
 var _tokens_corrupted: bool = false
+## 規約の閲覧の段階と、段階に入ってからの秒数・スクロールした回数
+var _terms_phase: TermsPhase = TermsPhase.OPEN
+var _terms_time: float = 0.0
+var _terms_scrolls: int = 0
 
 
 func _ready() -> void:
@@ -172,12 +191,97 @@ func _drive_agreement(scene: Node) -> void:
 			return
 	elif agree != null and agree.visible:
 		_maybe_shot("agreement")
-	# 再試行が出ていればそれを、無ければ同意ボタンを押す
+	# 再試行が出ていればそれを、無ければ（規約の閲覧の操作 → ）同意ボタンを押す
 	_error_time = next_error_time(_error_time, retry != null and retry.visible, _error_delta)
 	if retry != null and retry.visible:
 		_click_retry_if_ready(retry)
-	else:
+	elif not _drive_terms_viewer(scene, agree):
 		_click_if_ready(agree)
+
+
+## --e2e-view-terms の操作。閲覧が終わるまで true（= 同意ボタンはまだ押さない）、終われば false を返す。
+## 段階: OPEN（最初の「確認する」を押す）→ VIEWING（本文が出るまで待ち、dwell 秒見せる）→
+##       SCROLLING（本文を数回進める）→ CLOSING（「閉じる」を押す）→ DONE。
+## 時間は _terms_time（段階ごとに 0 から数える）。クリックは通常の _click_at で、閉じる動作まで本物の操作と同じ経路。
+func _drive_terms_viewer(scene: Node, agree: Button) -> bool:
+	if not _args.has("e2e-view-terms") or _terms_phase == TermsPhase.DONE:
+		return false
+	var viewer := scene.get_node_or_null(TERMS_VIEWER_NAME)
+	_terms_time += _error_delta
+	match _terms_phase:
+		TermsPhase.OPEN:
+			_terms_open(scene, viewer, agree)
+		TermsPhase.VIEWING:
+			_terms_view(viewer)
+		TermsPhase.SCROLLING:
+			_terms_scroll(viewer)
+		TermsPhase.CLOSING:
+			_terms_close(viewer)
+	return _terms_phase != TermsPhase.DONE
+
+
+## OPEN: 一覧が出てから、最初のカードの「確認する」を押す。閲覧画面が現れたら VIEWING へ。
+func _terms_open(scene: Node, viewer: Node, agree: Button) -> void:
+	if agree == null or not agree.visible:
+		return
+	if viewer != null:
+		_set_terms_phase(TermsPhase.VIEWING)
+		return
+	var list := scene.get_node_or_null(AGREEMENT_LIST_PATH)
+	if list != null and list.get_child_count() > 0:
+		_click_if_ready(list.get_child(0).get_node_or_null("OpenButton") as Button)
+
+
+## VIEWING: 取得が終わる（「読み込み中...」でなくなる）まで数えず、終わったら dwell 秒見せる。
+func _terms_view(viewer: Node) -> void:
+	var status: Label = null
+	if viewer != null:
+		status = viewer.get_node_or_null(TERMS_STATUS_PATH) as Label
+	if status == null or status.text == "読み込み中...":
+		_terms_time = 0.0
+		return
+	_maybe_shot("terms")
+	if _terms_time >= ACTION_DELAY + _dwell:
+		_set_terms_phase(TermsPhase.SCROLLING)
+
+
+## SCROLLING: 一定の間隔で本文を表示領域の一部ずつ進め、最後に dwell 秒見せてから CLOSING へ。
+func _terms_scroll(viewer: Node) -> void:
+	var body: RichTextLabel = null
+	if viewer != null:
+		body = viewer.get_node_or_null(TERMS_BODY_PATH) as RichTextLabel
+	if body == null:
+		_set_terms_phase(TermsPhase.CLOSING)
+		return
+	if _terms_scrolls >= TERMS_SCROLL_STEPS:
+		if _terms_time >= ACTION_DELAY + _dwell:
+			_maybe_shot("terms_scrolled")
+			_set_terms_phase(TermsPhase.CLOSING)
+		return
+	if _terms_time >= TERMS_SCROLL_INTERVAL:
+		_terms_time = 0.0
+		_terms_scrolls += 1
+		var bar := body.get_v_scroll_bar()
+		bar.value += bar.page * TERMS_SCROLL_RATIO
+		print("E2E: 規約を ", _terms_scrolls, " 回スクロール value=", bar.value)
+
+
+## CLOSING: 「閉じる」を押す（押し直しは 0.5 秒あける）。閲覧画面が消えたら DONE（同意ボタンの操作へ戻る）。
+func _terms_close(viewer: Node) -> void:
+	if viewer == null:
+		_scene_time = 0.0
+		_set_terms_phase(TermsPhase.DONE)
+		return
+	var close := viewer.get_node_or_null(TERMS_CLOSE_PATH) as Button
+	if close != null and not _is_clicking and _terms_time >= 0.5:
+		_terms_time = 0.0
+		_click_at(close.get_global_rect().get_center())
+
+
+func _set_terms_phase(phase: TermsPhase) -> void:
+	_terms_phase = phase
+	_terms_time = 0.0
+	print("E2E: 規約の閲覧 段階=", TermsPhase.keys()[phase])
 
 
 ## 再試行ボタンを押す。通常の条件（_click_if_ready）に加えて、エラーが表示されてから dwell 秒

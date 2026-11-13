@@ -41,6 +41,7 @@ func test_builds_dependencies() -> void:
 	assert_object(_context.login_use_case()).is_not_null()
 	assert_object(_context.fetch_pending_agreements_use_case()).is_not_null()
 	assert_object(_context.consent_agreement_use_case()).is_not_null()
+	assert_object(_context.fetch_agreement_document_use_case()).is_not_null()
 	assert_object(_context.get_access_token_use_case()).is_not_null()
 	assert_object(_context.get_player_id_use_case()).is_not_null()
 	assert_object(_context.get_login_bonuses_use_case()).is_not_null()

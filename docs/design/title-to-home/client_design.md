@@ -9,6 +9,8 @@
 >
 > 改訂履歴（第 1 段の実装を受けた修正）: refresh の実行（`/auth/refresh_token` の送信とログアウト判断 D9）は `ApiClient`（core）が持ち、core の契約は token の供給（`refresh_token` / `save_tokens`）に絞った（3-1・3-5）。マスターの起動時は、保存済みの更新 DB が全部そろっていればそちらを開き、状態は `user://master_state.json` の 1 ファイルにした（5 節）。
 
+> 改訂履歴（規約の閲覧）: 規約画面の「確認する」を、外部ブラウザから、アプリ内の閲覧画面（HTML を取得して `RichTextLabel` に描く。WebView は使わない）に変えた。`contexts/agreement` に `FetchAgreementDocumentUseCase`・`AgreementDocumentRepository`・`AgreementDocumentHttpRepository`（取得は認証なしの `ApiClient.download`）と、`presentation/terms_viewer/`（`terms_viewer_presenter.gd`・`html_to_bbcode.gd`）を足し、`ApiConfig.api_origin()` を足した。サーバーは規約の HTML を `api/public/legal/` に置き、`sys_agreement.url` を相対パスにする。e2e ドライバーに `--e2e-view-terms` を足した。
+
 > 改訂履歴（第 3 段の実装を受けた修正）: 画面（presentation）・`SceneRouter`・`Toast`・オートロードの切り替え・旧構成の削除・e2e ドライバーまでを実装した。設計との差分: ① presenter が読む UseCase を足した（`login` の `GetLoginBonusesUseCase`、`player` の `GetPlayerIdUseCase`、`auth` の `GetAccessTokenUseCase`〔Reverb の認証に渡すトークン〕と `AuthenticateUseCase.is_new_user()`〔「新規登録中...」と「ログイン中...」の出し分け〕）。② エラー文言と表示は `core/presentation/{error_messages,error_view}.gd` に共通化。③ `Toast.connect_to_reverb(user_id, access_token)` は認証情報を引数で受ける（`UserDataManager` の廃止に伴う。ギルドの自動購読は新構成へ移るまで行わない）。④ 検証用に `ApiClient.debug_override`（login の偽の失敗）を足した。⑤ e2e ドライバーは `debug/e2e_driver.gd`（7-1 の `tests/e2e/` から変更）、引数は `--e2e-case=<名前>`（`--e2e=<名前>` も可）。⑥ タイトルとホームの「APIテスト」ボタンは外した（api_test は debug 専用で、直接開く）。⑦ 旧 `scenes/` `scripts/` は削除済み（2-3 の移行の進め方は完了）。
 
 既存実装を**サーバー設計に合わせて直す**ための設計。サーバーが正で、食い違いはクライアントを合わせる。サーバーの仕様（項目・エラー）は複製せず、api.md を参照する。この文書はコードを変えない。変更するファイル・関数は、実コードを読んで特定した。
@@ -68,6 +70,10 @@ flowchart TD
 | 規約 | 読み込み中 | 「読み込み中...」（現行は空白のまま。ラベルを足す） | pending 取得 |
 | 規約 | 空 | 画面を見せず、そのままログインボーナスへ（要件: 無ければ見えない） | 自動 |
 | 規約 | 一覧 | 規約カード + 「すべての規約に同意して続ける」 | 同意送信 |
+| 規約 | 確認する | 規約カードの「確認する」で、規約の閲覧画面（下の「規約の閲覧」）を規約画面の上に重ねて開く（以前は `OS.shell_open` で外部ブラウザを開いていた）。開いている間は、もう 1 つ開かない | 閲覧画面の「閉じる」で規約画面に戻る（遷移ではない） |
+| 規約の閲覧 | 読み込み中 | 規約名（タイトル + 版）と「読み込み中...」。`sys_agreement.url` を取得する（`FetchAgreementDocumentUseCase`）。絶対 URL（http / https）はそのまま、`/` 始まりの相対パスは API の origin（`ApiConfig.api_origin()`）に付ける。それ以外は通信せず失敗 | 自動 |
+| 規約の閲覧 | 表示 | 取得した HTML のサブセット（`h1`〜`h3` `p` `br` `ul` `ol` `li` `strong` `b` `em` `i` `a`〔http / https のみ〕`hr`）を BBCode に変換し、スクロールできる `RichTextLabel` に描く。未対応のタグは文字だけ残し、`script` `style` `head` `title` は捨てる。本文の `[` `]` はエスケープする。リンクは http / https だけ外部ブラウザで開く | 「閉じる」 |
+| 規約の閲覧 | エラー | 通信断・タイムアウト・HTTP 200 以外・本文が空・URL 不正・表示できる内容が無い、のいずれか。エラー文と「再試行」「ブラウザで開く」（元の URL を外部ブラウザで開く） | 再試行は取得からやり直す（二重取得はしない） |
 | 規約 | 送信中 | ボタンを無効化、「送信中...」 | 規約ごとに 1 件ずつ送る |
 | 規約 | エラー | エラー文と「再試行」。pending 取得失敗なら取得から、consent 失敗なら**失敗した規約から**やり直す | 再試行 |
 | ログインボーナス | あり | 受取内容（種別・ID・数量）+「タップして続ける」 | タップ → ホーム |

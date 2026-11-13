@@ -87,6 +87,12 @@ static func broadcasting_auth_url() -> String:
 	return _origin_of(api_base_url()) + BROADCASTING_AUTH_PATH
 
 
+## API の origin（スキーム + ホスト + ポート。例: http://localhost:8090）。
+## サーバーの public 配下の静的ファイル（規約の HTML など）は /api の外にあるため、その相対パスの前置きに使う。
+static func api_origin() -> String:
+	return _origin_of(api_base_url())
+
+
 ## Toast へ渡す、Reverb の接続先と認証先の入れ物を作る。
 static func reverb_endpoint() -> ReverbEndpoint:
 	return ReverbEndpoint.new(reverb_ws_url(), broadcasting_auth_url())

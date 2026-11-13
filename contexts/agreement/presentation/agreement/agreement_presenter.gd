@@ -17,12 +17,18 @@
 ## 二重送信の防止: 送信中は _is_sending を立て、ボタンを無効にする（連打しても 2 回目は送らない）。
 ## 画面の破棄: await から戻ったとき、遷移・破棄済み（ツリーの外）なら何もせず終わる（破棄済みの画面や
 ##   router を触らない）。送信中だった場合は _is_sending を戻してから終わる。
+## 規約の閲覧: カードの「確認する」で閲覧画面（terms_viewer）を、この画面の上に重ねて開く。閉じると
+##   この画面に戻る。開いている間は、もう 1 つ開かない（連打対策）。
 ## 依存: UseCase だけを呼ぶ。遷移は既定ではオートロードの SceneRouter（テストは setup で偽物を渡す）。
 class_name AgreementPresenter
 extends Control
 
 ## 失敗がどこで起きたか。再試行の起点を決める
 enum Failed { NONE, FETCH, CONSENT }
+
+const TERMS_VIEWER_SCENE := preload(
+	"res://contexts/agreement/presentation/terms_viewer/terms_viewer.tscn"
+)
 
 ## エラー文（SESSION_EXPIRED）を見せてからタイトルへ戻るまでの秒数
 var session_notice_sec: float = 2.0
@@ -32,9 +38,12 @@ var _consent_index: int = 0
 var _consent_keys: Dictionary = {}
 var _failed: Failed = Failed.NONE
 var _is_sending: bool = false
+## 開いている閲覧画面（無ければ null）
+var _terms_viewer: TermsViewerPresenter = null
 
 var _fetch_pending: FetchPendingAgreementsUseCase
 var _consent: ConsentAgreementUseCase
+var _fetch_document: FetchAgreementDocumentUseCase
 var _router: Object
 var _is_configured: bool = false
 
@@ -45,12 +54,17 @@ var _is_configured: bool = false
 
 
 ## UseCase と遷移の相手を渡す。_ready より前に呼ぶとその値を使い、呼ばなければ _ready がオートロードから取る。
+## fetch_document は閲覧画面に渡す、規約本文の取得（渡さないと「確認する」は何も開かない）。
 func setup(
-	fetch_pending: FetchPendingAgreementsUseCase, consent: ConsentAgreementUseCase, router: Object
+	fetch_pending: FetchPendingAgreementsUseCase,
+	consent: ConsentAgreementUseCase,
+	router: Object,
+	fetch_document: FetchAgreementDocumentUseCase = null
 ) -> void:
 	_fetch_pending = fetch_pending
 	_consent = consent
 	_router = router
+	_fetch_document = fetch_document
 	_is_configured = true
 
 
@@ -59,7 +73,8 @@ func _ready() -> void:
 		setup(
 			AppContext.fetch_pending_agreements_use_case(),
 			AppContext.consent_agreement_use_case(),
-			SceneRouter
+			SceneRouter,
+			AppContext.fetch_agreement_document_use_case()
 		)
 	_agree_all_button.pressed.connect(_on_agree_all_pressed)
 	_retry_button.pressed.connect(_on_retry_pressed)
@@ -111,11 +126,25 @@ func _add_agreement_card(agreement: SysAgreement) -> void:
 	card.add_child(name_label)
 
 	var open_button := Button.new()
+	open_button.name = "OpenButton"
 	open_button.text = "確認する"
-	open_button.pressed.connect(func() -> void: OS.shell_open(agreement.url))
+	open_button.pressed.connect(func() -> void: _open_terms(agreement))
 	card.add_child(open_button)
 
 	_agreement_list.add_child(card)
+
+
+## 規約の閲覧画面を、この画面の上に重ねて開く。閉じるとこの画面に戻る（遷移はしない）。
+func _open_terms(agreement: SysAgreement) -> void:
+	if _terms_viewer != null or _fetch_document == null:
+		return
+	var viewer: TermsViewerPresenter = TERMS_VIEWER_SCENE.instantiate()
+	viewer.name = "TermsViewer"
+	# add_child より前に渡す（_ready で取得が始まるため）
+	viewer.setup(_fetch_document, agreement.title + " v" + agreement.version, agreement.url)
+	viewer.closed.connect(func() -> void: _terms_viewer = null)
+	_terms_viewer = viewer
+	add_child(viewer)
 
 
 ## 「すべての規約に同意して続ける」。連打されても送信は 1 本だけ。

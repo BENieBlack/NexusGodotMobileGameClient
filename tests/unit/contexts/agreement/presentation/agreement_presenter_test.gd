@@ -12,6 +12,7 @@ const RETRY_PATH := "VBoxContainer/RetryButton"
 const STATUS_PATH := "VBoxContainer/StatusLabel"
 
 var _repository: FakeAgreementRepository
+var _document_repository: FakeAgreementDocumentRepository
 var _router: ScreenTestDoubles.FakeRouter
 var _screen: AgreementPresenter
 
@@ -38,6 +39,7 @@ class SlowFetchRepository:
 
 func before_test() -> void:
 	_repository = FakeAgreementRepository.new()
+	_document_repository = FakeAgreementDocumentRepository.new()
 	_router = ScreenTestDoubles.FakeRouter.new()
 
 
@@ -50,7 +52,8 @@ func _start(repository: FakeAgreementRepository = null) -> void:
 	_screen.setup(
 		FetchPendingAgreementsUseCase.new(_repository),
 		ConsentAgreementUseCase.new(_repository),
-		_router
+		_router,
+		FetchAgreementDocumentUseCase.new(_document_repository)
 	)
 	add_child(auto_free(_screen))
 	await get_tree().process_frame
@@ -230,3 +233,38 @@ func test_screen_removed_during_consent_stops_quietly() -> void:
 	assert_array(_router.calls).is_empty()
 	assert_array(slow.calls).contains_exactly(["pending", "consent:1"])
 	_screen.free()
+
+
+## 前提: 未同意が 1 件（URL あり）、本文の取得は成功する。
+## 操作: 「確認する」。期待: 規約画面の上に閲覧画面が開き（遷移はしない）、規約の URL で本文を取得し、
+## 表示名は「タイトル v版」。連打しても 2 枚目は開かない。操作: 閉じる。期待: 閲覧画面が消えて規約画面に戻り、
+## もう一度開ける。
+func test_open_button_opens_terms_viewer_and_close_returns() -> void:
+	var pending := FakeAgreementRepository.pending_ok([1])
+	pending.agreements[0].url = "/legal/a.html"
+	_repository.pending_results = [pending]
+	_document_repository.results = [
+		FakeAgreementDocumentRepository.ok("<p>本文</p>"),
+		FakeAgreementDocumentRepository.ok("<p>本文</p>"),
+	]
+	await _start()
+	var card := (_screen.get_node(LIST_PATH) as VBoxContainer).get_child(0)
+	var open_button := card.get_node("OpenButton") as Button
+
+	open_button.pressed.emit()
+	open_button.pressed.emit()
+	await get_tree().process_frame
+	var viewer := _screen.get_node("TermsViewer") as TermsViewerPresenter
+	assert_object(viewer).is_not_null()
+	assert_array(_document_repository.urls).contains_exactly(["/legal/a.html"])
+	assert_str((viewer.get_node("VBoxContainer/TitleLabel") as Label).text).is_equal("規約1 v1.0")
+	assert_array(_router.calls).is_empty()
+
+	(viewer.get_node("VBoxContainer/CloseButton") as Button).pressed.emit()
+	await get_tree().process_frame
+	assert_bool(is_instance_valid(viewer)).is_false()
+	assert_bool(_agree().visible).is_true()
+
+	open_button.pressed.emit()
+	await get_tree().process_frame
+	assert_array(_document_repository.urls).has_size(2)

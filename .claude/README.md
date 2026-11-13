@@ -34,7 +34,7 @@ NexusGodotMobileGameClient/
 │   └── data/                  #   SQLite、差分ダウンロード、ハッシュ管理、mst Repository、version API
 ├── contexts/                  # サーバーの Domain/{Context} と同じ名前（master_data は含めない）
 │   ├── auth/                  #   認証、タイトル画面
-│   ├── agreement/             #   規約の取得・同意、規約画面
+│   ├── agreement/             #   規約の取得・同意・本文の閲覧（HTML → BBCode）、規約画面と閲覧画面
 │   ├── login/                 #   login、ログインボーナス画面
 │   ├── player/                #   プレイヤー・所持データ、ホーム画面
 │   │   └── {presentation, domain(entities, use_cases, repositories), data(api, local, repositories)}
@@ -85,6 +85,8 @@ NexusGodotMobileGameClient/
   ↓
 ログインボーナス画面（通信しない）→ ホーム画面
 ```
+
+規約画面の「確認する」は、規約の URL（`sys_agreement.url`。絶対 URL か `/legal/...` のような相対パス。相対パスは API の origin に付ける）から HTML を取得して、アプリ内の閲覧画面（`terms_viewer`）に描く。許可するタグは `h1`〜`h3` `p` `br` `ul` `ol` `li` `strong` `b` `em` `i` `a href`（http / https のみ）`hr`（変換は `html_to_bbcode.gd`）。取得に失敗したら、エラー文と「再試行」「ブラウザで開く」を出す。
 
 規約画面でセッションが無効になった（refresh 失敗）ときは、タイトルへ戻って認証からやり直す。
 
@@ -137,6 +139,8 @@ Reverb（通知の WebSocket）の接続先も同じ順で決まります（環�
 godot --path . -- --e2e-case=smoke --e2e-reset            # 新規ユーザー（トークンと device_id を消す）
 godot --path . -- --e2e-case=smoke --e2e-fail-login=503 --e2e-no-retry   # login だけメンテナンスにして、エラー表示で止める
 ```
+
+規約の閲覧画面まで撮るときは `--e2e-view-terms` を付ける（最初の規約の「確認する」→ 閲覧 → スクロール → 「閉じる」→ 同意）。サーバーの規約 URL が配信されていないと、閲覧画面はエラー表示になる。取得・変換・描画だけを確かめるなら `godot --path . --resolution 540x960 res://debug/verify_terms_viewer.tscn -- <画像の出力先>`（認証なし）。
 
 引数の一覧は `debug/e2e_driver.gd` の冒頭。sign_up は IP あたり 10 回/時間の上限があるので、`--e2e-reset` を繰り返さない。ボタンのクリックはヘッドレス（`--headless`）では効かないので、再試行ボタンの操作を含むケースは通常起動で動かす。
 

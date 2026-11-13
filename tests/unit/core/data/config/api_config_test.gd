@@ -62,6 +62,16 @@ func test_project_setting_overrides_default_and_trims_slash() -> void:
 	assert_str(ApiConfig.master_base_url()).is_equal("http://cdn.test")
 
 
+## 前提: API のベース URL が /api を含む。操作: api_origin。期待: スキーム + ホスト + ポートだけ
+## （規約の HTML など public 配下の相対パスの前置きに使う）。
+func test_api_origin_drops_path() -> void:
+	assert_str(ApiConfig.api_origin()).is_equal("http://localhost:8090")
+	ProjectSettings.set_setting(
+		ApiConfig.SETTING_API_BASE_URL, "https://api.example.test:8443/api/"
+	)
+	assert_str(ApiConfig.api_origin()).is_equal("https://api.example.test:8443")
+
+
 ## 前提: 設定と環境変数の両方がある。操作: 読む。期待: 環境変数が勝つ。
 ## 検証時に、書き換えずに向き先を変えられる（設計 2-1）ことを守る。
 func test_environment_overrides_project_setting() -> void:

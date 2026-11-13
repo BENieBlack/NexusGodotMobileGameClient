@@ -57,6 +57,7 @@ var _get_login_bonuses_use_case: GetLoginBonusesUseCase
 # --- agreement ---
 var _fetch_pending_agreements_use_case: FetchPendingAgreementsUseCase
 var _consent_agreement_use_case: ConsentAgreementUseCase
+var _fetch_agreement_document_use_case: FetchAgreementDocumentUseCase
 
 
 func _ready() -> void:
@@ -126,6 +127,10 @@ func fetch_pending_agreements_use_case() -> FetchPendingAgreementsUseCase:
 
 func consent_agreement_use_case() -> ConsentAgreementUseCase:
 	return _consent_agreement_use_case
+
+
+func fetch_agreement_document_use_case() -> FetchAgreementDocumentUseCase:
+	return _fetch_agreement_document_use_case
 
 
 # --- デバッグ・e2e 用（製品の画面は使わない。debug/ だけが呼ぶ） ---
@@ -200,6 +205,9 @@ func _build() -> void:
 	var agreement_repository := AgreementApiRepository.new(_api_client)
 	_fetch_pending_agreements_use_case = FetchPendingAgreementsUseCase.new(agreement_repository)
 	_consent_agreement_use_case = ConsentAgreementUseCase.new(agreement_repository)
+	_fetch_agreement_document_use_case = FetchAgreementDocumentUseCase.new(
+		AgreementDocumentHttpRepository.new(_api_client)
+	)
 
 
 ## ApiClient のシグナルを EventBus へ中継し、EventBus の受け手を登録する。
