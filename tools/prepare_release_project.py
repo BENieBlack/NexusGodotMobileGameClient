@@ -42,6 +42,7 @@ INCLUDE = [
     "project.godot",  # プロジェクト設定（複製では変換する）
     "icon.svg",  # アプリのアイコン（config/icon が参照する）
     "icon.svg.import",  # アイコンのインポート設定
+    "THIRD_PARTY_NOTICES.md",  # 第三者の素材・ライブラリの表記（製品にも同梱する。Godot のリソースとしては読まれない）
     "app",  # AppContext・SceneRouter（オートロードの実体）
     "core",  # 共通の基盤
     "contexts",  # 機能ごとのコンテキスト（シーン・スクリプト）
