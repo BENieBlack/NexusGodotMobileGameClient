@@ -9,6 +9,7 @@
 - 応答・コメント・コミットメッセージ・ドキュメントは日本語。識別子は英語（[.claude/language.md](.claude/language.md)）
 - コードには処理の流れと理由が分かるコメントを書く（[coding-standards.md](.claude/coding-standards.md) のコメントの節）
 - コミットメッセージと PR に AI の共同作者表記（`Co-Authored-By` などの trailer、`Generated with ...` などの署名）を付けない
+- 個人情報（個人名・個人や会社のメール・会社名・ホーム配下の絶対パス・トークン）をコミット・PR・文書・コードに入れない。コミット前に `bash scripts/check-private-info.sh`（追跡ファイル全体は `--all`。CI の「個人情報の検査」も同じ）。個人名・会社名はローカルの `.private-denylist`（git に入れない）にだけ書く。規則は Nexus の `docs/workflow/private-info.md`
 - main へ直接コミットしない。作業ブランチ（`feature/` `fix/` `docs/` `refactor/` + 英語ケバブケース）を切って PR でマージする
 - 設計は Nexus リポジトリ（`docs/requirements/` と `docs/design/`）と、サーバーの `docs/design/<機能>/` が正本。クライアントの設計は `docs/design/<機能>/client_design.md` に置き、仕様を複製しない
 - マージ済みの設計と食い違う実装が要るときは、実装で吸収せず設計の修正を先に出す

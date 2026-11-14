@@ -51,3 +51,44 @@ jobs:
       # sqlite を使うテストを足すときは、CI でバイナリを用意する手順を足す
       - name: make check
         run: make check
+
+  # 個人情報の検査。check ジョブとは独立（Godot も Python も要らず、シェルだけで数秒で終わる）。
+  # 流れ: 履歴つきで checkout → 検査する範囲を決める → scripts/check-private-info.sh --all --ci を実行。
+  #   追跡ファイル全体（addons/ は外部ライブラリなので除く）と、その範囲のコミットのメッセージ・作者を見る。
+  #   --ci は git の user 設定を見ない（CI のマシンには個人の設定が無いため）。規則は Nexus の docs/workflow/private-info.md
+  private-info:
+    name: 個人情報の検査
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # 範囲のコミットを読むため、履歴をすべて取得する
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      # PR は base..head（PR で増えるコミット）、push は直前..今回。
+      # 新規ブランチなど直前のコミットが無いときは、今回のコミット 1 件だけ見る。
+      # 最初のコミット（親が無く ~1 が解決できない）なら範囲なしにして、ファイルだけ検査する
+      - name: 個人情報の検査
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          if [ "$EVENT_NAME" = pull_request ]; then
+            range="$PR_BASE..$PR_HEAD"
+          elif git cat-file -e "$PUSH_BEFORE^{commit}" 2>/dev/null; then
+            range="$PUSH_BEFORE..$PUSH_AFTER"
+          elif git rev-parse -q --verify "$PUSH_AFTER~1" >/dev/null; then
+            range="$PUSH_AFTER~1..$PUSH_AFTER"
+          else
+            range=""
+          fi
+          echo "検査する範囲: ${range:-なし（ファイルだけ）}"
+          if [ -n "$range" ]; then
+            bash scripts/check-private-info.sh --all --ci --range "$range"
+          else
+            bash scripts/check-private-info.sh --all --ci
+          fi

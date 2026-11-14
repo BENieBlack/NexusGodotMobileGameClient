@@ -14,3 +14,6 @@ __pycache__/
 
 # make release-project が作る製品ビルド用の複製
 /build/
+
+# 個人名・会社名の拒否リスト（scripts/check-private-info.sh が使う。git に入れない）
+/.private-denylist

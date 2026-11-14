@@ -70,6 +70,7 @@ EXCLUDE = [
     "docs",  # 設計・手順の文書
     "debug",  # 開発専用（E2EDriver・検証スクリプト）
     "tests",  # テスト
+    "scripts",  # 開発用スクリプト（個人情報の検査）
     "tools",  # 開発用ツール（この複製の生成を含む）
     "reports",  # テストの出力
     "build",  # この複製の出力先
