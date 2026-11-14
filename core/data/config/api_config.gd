@@ -41,6 +41,9 @@ const SETTING_REVERB_SCHEME := "nexus/reverb_scheme"
 const SETTING_REVERB_APP_KEY := "nexus/reverb_app_key"
 const SETTING_PLATFORM := "nexus/platform"
 
+## Accept-Language ヘッダーと mst_item__l10n の引きに使う言語（固定。環境変数・設定では上書きしない）
+const LANGUAGE_JA := "ja"
+
 ## X-Platform ヘッダーの許可値（サーバー api.md 10 節。完全一致）
 const PLATFORM_APPLE := "Apple"
 const PLATFORM_GOOGLE := "Google"
@@ -103,6 +106,13 @@ static func api_origin() -> String:
 ## Toast へ渡す、Reverb の接続先と認証先の入れ物を作る。
 static func reverb_endpoint() -> ReverbEndpoint:
 	return ReverbEndpoint.new(reverb_ws_url(), broadcasting_auth_url())
+
+
+## 言語（"ja" 固定）。ApiClient が全 request() に Accept-Language として付け、
+## LocalMstItemRepository が mst_item__l10n の language 列と照合する。API とマスターで同じ 1 か所の値にするため。
+## 切り替え（OS のロケール・設定画面）は別機能で、そのときこの関数の中身だけ差し替える。
+static func language() -> String:
+	return LANGUAGE_JA
 
 
 ## X-Platform ヘッダーの値（"Apple" か "Google"）。client_design.md 5-2。

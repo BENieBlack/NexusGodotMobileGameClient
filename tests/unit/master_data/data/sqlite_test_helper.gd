@@ -79,3 +79,39 @@ static func create_home_master_db(path: String) -> bool:
 			return false
 	database.close_db()
 	return true
+
+
+## path に SQLite ファイルを作り、mst_item と mst_item__l10n を入れる（配信から取り込まれる想定の任意テーブル。
+## 実際の配信と同じく l10n は親と同じファイルに入る）。
+## 行: free_diamond（ja・en の名前）、en_only（en の名前だけ）、null_name（ja の name が NULL）、
+##     no_l10n（l10n の行なし）、null_cols（deploy_key・type が NULL）。
+static func create_item_master_db(path: String) -> bool:
+	if not ClassDB.class_exists("SQLite"):
+		return false
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var database: Object = ClassDB.instantiate("SQLite")
+	database.path = path
+	if not database.open_db():
+		return false
+	var statements := [
+		"CREATE TABLE mst_item (deploy_key INTEGER, id TEXT PRIMARY KEY, type TEXT)",
+		"INSERT INTO mst_item VALUES (1, 'free_diamond', 'currency')",
+		"INSERT INTO mst_item VALUES (1, 'en_only', 'currency')",
+		"INSERT INTO mst_item VALUES (1, 'null_name', 'currency')",
+		"INSERT INTO mst_item VALUES (1, 'no_l10n', 'currency')",
+		"INSERT INTO mst_item VALUES (NULL, 'null_cols', NULL)",
+		(
+			"CREATE TABLE mst_item__l10n (deploy_key INTEGER, mst_item_id TEXT, language TEXT, "
+			+ "name TEXT, description TEXT, PRIMARY KEY (mst_item_id, language))"
+		),
+		"INSERT INTO mst_item__l10n VALUES (1, 'free_diamond', 'ja', '無償ダイヤ', NULL)",
+		"INSERT INTO mst_item__l10n VALUES (1, 'free_diamond', 'en', 'Free Diamond', NULL)",
+		"INSERT INTO mst_item__l10n VALUES (1, 'en_only', 'en', 'Only English', NULL)",
+		"INSERT INTO mst_item__l10n VALUES (1, 'null_name', 'ja', NULL, NULL)",
+	]
+	for statement: String in statements:
+		if not database.query(statement):
+			database.close_db()
+			return false
+	database.close_db()
+	return true

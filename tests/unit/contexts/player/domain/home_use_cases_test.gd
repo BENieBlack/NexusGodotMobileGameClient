@@ -37,6 +37,19 @@ func _build(
 	return GetHomeSummaryUseCase.new(repository, levels, config)
 
 
+## 前提: trx_diamond（有償 30）と trx_item_list の free_diamond（無償 20）がある。
+## 期待: ダイヤの合計は有償 + 無償の 50（free-diamond-item の合計規則。暫定項は無い）。
+func test_diamond_total_is_paid_plus_free_diamond() -> void:
+	var repository := LocalPlayerRepository.new()
+	_login(
+		repository,
+		{"my_id": "ABCD1234", "name": "taro", "level": 1},
+		{"trx_item_list": [{"mst_item_id": "free_diamond", "free_amount": 20}]},
+		{"paid_amount": 30}
+	)
+	assert_int(_build(repository).handle().diamond_total).is_equal(50)
+
+
 ## 前提: 全項目が揃った login。期待: 名前・ID・レベル・コイン・ダイヤの合計・スタミナの起点が入る。
 func test_builds_full_summary() -> void:
 	var repository := LocalPlayerRepository.new()

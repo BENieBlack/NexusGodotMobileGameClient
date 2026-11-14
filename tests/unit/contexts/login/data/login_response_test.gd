@@ -9,7 +9,7 @@ func _full_body() -> Dictionary:
 		"trx_unit_list": [{"trx_unit_id": "u1"}],
 		"trx_item_list": [{"mst_item_id": "potion"}, {"mst_item_id": "ether"}],
 		"trx_wallet_list": [{"mst_item_id": "gold"}],
-		"trx_diamond": {"platform": "Apple", "paid_amount": 30, "free_amount": 100},
+		"trx_diamond": {"platform": "Apple", "paid_amount": 30},
 		"trx_equipment_list": [{"trx_equipment_id": "e1"}],
 		"trx_stamina_list": [{"type": "main", "recovery_rate_multiplier": "1.00"}],
 		"login_bonus_list":

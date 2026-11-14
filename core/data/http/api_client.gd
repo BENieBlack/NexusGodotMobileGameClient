@@ -59,6 +59,8 @@ const REFRESH_PATH := "/auth/refresh_token"
 ## X-Platform の欠落・不正を表す error_code（サーバー api.md 10 節。HTTP 299。仮置きのコード）。
 ## 分類（BUSINESS）はこの値に依存させず、開発者向けの push_error を出す判定にだけ使う
 const ERROR_CODE_PLATFORM_REJECTED := 99003
+## 言語ヘッダーの名前（サーバーの ResolveLanguage が解釈する標準ヘッダー。名前を変えるときはここだけ）
+const LANGUAGE_HEADER := "Accept-Language"
 
 ## refresh の失敗のうち「refresh を試せなかっただけ」の種別。セッションは破棄せず、この失敗を
 ## そのまま呼び出し元へ返す（電波が切れただけでログアウトさせない。client_design.md 3-5）
@@ -262,6 +264,7 @@ func _send(method: String, endpoint: String, body: Dictionary, options: Dictiona
 
 ## リクエストヘッダーを組み立てる。
 ## Authorization は認証付きでトークンが在るときだけ。X-Master-Hash は全リクエストに（空なら付けない）。
+## Accept-Language（ApiConfig.language()）も X-Platform と同じ 1 か所で全リクエストに付ける（download() には付かない）。
 ## X-Platform は request() を通る全リクエスト（refresh・GET /auth/version を含む）にここ 1 か所で付ける
 ## （空なら付けない）。署名の対象ではない。download()（配信ホスト・規約本文）は _send を通らないので付かない。
 ## ログにトークンや本文を出さない（client_design.md 8 節 11）。
@@ -279,6 +282,8 @@ func _build_headers(
 			headers.append("X-Master-Hash: " + master_hash)
 	if _platform != "":
 		headers.append("X-Platform: " + _platform)
+	# 言語は固定（ja）。X-Platform と同じ位置で全 request() に付ける。付けない状態は作らない
+	headers.append(LANGUAGE_HEADER + ": " + ApiConfig.language())
 	if idempotency_key != "":
 		headers.append("X-Unique-Request-Identifier: " + idempotency_key)
 	for header in extra_headers:

@@ -41,6 +41,7 @@ var _mst_equipment_repository: MstEquipmentRepository
 var _mst_gacha_repository: MstGachaRepository
 var _mst_player_level_repository: MstPlayerLevelRepository
 var _mst_config_repository: MstConfigRepository
+var _mst_item_repository: MstItemRepository
 
 # --- core ---
 var _clock: SystemClock
@@ -62,6 +63,7 @@ var _get_stamina_display_use_case: GetStaminaDisplayUseCase
 var _login_bonus_repository: LoginBonusRepository
 var _login_use_case: LoginUseCase
 var _get_login_bonuses_use_case: GetLoginBonusesUseCase
+var _get_login_bonus_displays_use_case: GetLoginBonusDisplaysUseCase
 
 # --- agreement ---
 var _fetch_pending_agreements_use_case: FetchPendingAgreementsUseCase
@@ -136,6 +138,11 @@ func get_login_bonuses_use_case() -> GetLoginBonusesUseCase:
 	return _get_login_bonuses_use_case
 
 
+## ログインボーナス画面の表示用の値（受取 + mst_item の名前）。
+func get_login_bonus_displays_use_case() -> GetLoginBonusDisplaysUseCase:
+	return _get_login_bonus_displays_use_case
+
+
 func login_use_case() -> LoginUseCase:
 	return _login_use_case
 
@@ -198,6 +205,11 @@ func mst_config_repository() -> MstConfigRepository:
 	return _mst_config_repository
 
 
+## アイテムの表示名（mst_item と l10n）。配信に無い・名前が無いときは get_by_id が null か name 空を返す。
+func mst_item_repository() -> MstItemRepository:
+	return _mst_item_repository
+
+
 # --- 組み立て ---
 
 
@@ -231,6 +243,8 @@ func _build() -> void:
 	_mst_gacha_repository = LocalMstGachaRepository.new(_master_database)
 	_mst_player_level_repository = LocalMstPlayerLevelRepository.new(_master_database)
 	_mst_config_repository = LocalMstConfigRepository.new(_master_database)
+	# 名前の言語は API の Accept-Language と同じ 1 か所の値（ApiConfig.language()）
+	_mst_item_repository = LocalMstItemRepository.new(_master_database, ApiConfig.language())
 	# auth
 	var auth_repository := AuthApiRepository.new(_api_client, _auth_token_repository)
 	_authenticate_use_case = AuthenticateUseCase.new(auth_repository, _auth_token_repository)
@@ -252,6 +266,9 @@ func _build() -> void:
 		_apply_login_data_use_case
 	)
 	_get_login_bonuses_use_case = GetLoginBonusesUseCase.new(_login_bonus_repository)
+	_get_login_bonus_displays_use_case = GetLoginBonusDisplaysUseCase.new(
+		_get_login_bonuses_use_case, _mst_item_repository
+	)
 	# agreement
 	var agreement_repository := AgreementApiRepository.new(_api_client)
 	_fetch_pending_agreements_use_case = FetchPendingAgreementsUseCase.new(agreement_repository)

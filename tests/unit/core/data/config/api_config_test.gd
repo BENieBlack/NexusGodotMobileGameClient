@@ -208,3 +208,10 @@ func test_platform_reads_environment_then_project_setting() -> void:
 	assert_str(ApiConfig.platform()).is_equal("Apple")
 	OS.unset_environment(ApiConfig.ENV_PLATFORM)
 	ProjectSettings.set_setting(ApiConfig.SETTING_PLATFORM, saved)
+
+
+## 前提: 環境変数 NEXUS_LANGUAGE を設定しても。期待: language() は常に "ja"（固定。上書きしない）。
+func test_language_is_fixed_ja() -> void:
+	OS.set_environment("NEXUS_LANGUAGE", "en")
+	assert_str(ApiConfig.language()).is_equal("ja")
+	OS.unset_environment("NEXUS_LANGUAGE")

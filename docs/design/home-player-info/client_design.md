@@ -197,6 +197,8 @@ F9（クライアントは独自の計算を足さない）の例外は 2 つだ
 
 ### 4-2. ダイヤの合計（D1〜D3・Q14・P6）
 
+> **追従（free-diamond-item 実装済み）**: 暫定項 `trx_diamond.free_amount` は廃止され、合計は「有償 `trx_diamond.paid_amount` + 無償 `trx_item_list` の `free_diamond`」だけになった（`free_amount` のキーが来ても足さない）。正は [free-diamond-item のクライアント設計 2 節](../free-diamond-item/client_design.md)。以下の暫定項・二重カウントの記述は移行期間の経緯。
+
 ダイヤの元は 3 か所に分かれる。login の応答（api.md 2.5・2.6・4 節）:
 
 | 元 | 中身 | 現在 | 別機能 free-diamond-item の完了後 |

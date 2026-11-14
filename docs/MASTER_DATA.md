@@ -178,6 +178,14 @@ var config := AppContext.mst_config_repository().get_by_id("stamina_recovery_int
 if config != null:
     print(config.value_as_int())   # value_type が int で整数に読めるときだけ。他は -1
 
+# アイテム名（mst_item と l10n の mst_item__l10n。ログインボーナスの表示用）
+# 同梱 DB には入れず、配信があるときだけ更新 DB から読む（REQUIRED_TABLES にも入れない。mst_config と同じ）。
+# 言語は ApiConfig.language()（"ja" 固定。API の Accept-Language と同じ値）を AppContext が渡す。
+# mst_item に行が無い・配信が無いときは null、l10n の行（指定言語）が無いときは name が空の MstItem
+var item := AppContext.mst_item_repository().get_by_id("free_diamond")
+if item != null and item.name != "":
+    print(item.name)   # 例: 無償ダイヤ。引けなければ呼び出し側（login）が固定名などへ倒す
+
 # 装備
 var equipments := AppContext.mst_equipment_repository().get_all()
 var equipment := AppContext.mst_equipment_repository().get_by_id("equip_001")

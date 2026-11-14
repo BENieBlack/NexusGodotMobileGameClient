@@ -67,3 +67,14 @@
 - domain（`player/domain/`）: `StaminaRecovery`（整数計算の回復表示。起点は不変で二重加算なし）・`DiamondTotal`・`CoinAmount`（`services/` の純粋関数。architecture.md に例外を追記）、`StaminaSource` / `StaminaDisplay` / `HomeSummary` / `PlayerResourceIds`、`GetHomeSummaryUseCase`（開いたときとマスター更新時）・`GetStaminaDisplayUseCase`（tick ごと。now = 端末時計 + サーバー時刻のオフセット）
 - presentation: `home.tscn` を縦並び（プレイヤー・スタミナ・通貨・導線）に作り直し。`HomePresenter` は UseCase を呼ぶだけ。1 秒の `StaminaTimer`（残り時間が無いとき止める）、復帰通知で再計算、`HomeText`（文言・桁区切り・時間）、`SafeAreaMargins`（セーフエリアの物理ピクセル → ビューポート座標）
 - e2e: `--e2e-home-hold` / `--e2e-clock-skew` / `--e2e-omit-platform`、`E2E_RESULT` にホームの値
+
+
+## free-diamond-item（2026-11）
+
+設計: `docs/design/free-diamond-item/client_design.md`（1〜7 節）。
+
+- `DiamondTotal`: 暫定項 `trx_diamond.free_amount` を削除（有償 `paid_amount` + `trx_item_list` の `free_diamond` だけ。キーが来ても足さない）
+- ログインボーナス: `LoginBonus.is_free_diamond()`、`GetLoginBonusDisplaysUseCase`（`LoginBonusDisplay` = 受取 + `mst_item` の名前）、`LoginBonusPresenter` は名前を優先し、引けなければ `free_diamond` は「無償ダイヤ」・他の item は「アイテム (ID:…)」。`diamond` の分岐は削除
+- master_data: `MstItem` / `MstItemRepository` / `LocalMstItemRepository`（`mst_item` と `mst_item__l10n`。同梱せず `REQUIRED_TABLES` も変えない）
+- 言語: `ApiConfig.language()`（`ja` 固定）、`ApiClient._build_headers()` で全 `request()` に `Accept-Language: ja`（`download()`・Toast には付けない）
+- e2e ドライバーは変更なし

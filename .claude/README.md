@@ -188,7 +188,7 @@ godot --path . -- --e2e-case=smoke --e2e-fail-login=503 --e2e-no-retry   # login
   "trx_wallet_list": [...],
   "trx_equipment_list": [...],
   "trx_stamina_list": [...],
-  "trx_diamond": { "platform": "Apple", "paid_amount": 0, ... },  // 単数。行が無ければ null
+  "trx_diamond": { "platform": "Apple", "paid_amount": 0, ... },  // 単数（有償のみ。無償は trx_item_list の free_diamond）。行が無ければ null
   "login_bonus_list": [
     { "unique_id": "...", "type": "gold", "id": "gold", "amount": 100, "expire_at": null, "metadata": null }
   ]
