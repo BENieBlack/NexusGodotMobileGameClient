@@ -1,8 +1,7 @@
-[gd_scene load_steps=8 format=3 uid="uid://c3x7y9k2n5h8p"]
+[gd_scene load_steps=6 format=3 uid="uid://c3x7y9k2n5h8p"]
 
 [ext_resource type="Script" path="res://contexts/player/presentation/home/home_presenter.gd" id="1_home"]
 [ext_resource type="Theme" path="res://assets/ui/casual_theme.tres" id="2_theme"]
-[ext_resource type="Texture2D" path="res://assets/ui/kenney_blue/icon_checkmark.png" id="3_icon"]
 [ext_resource type="VideoStream" path="res://assets/video/bg_loop.ogv" id="4_video"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
@@ -16,28 +15,22 @@ border_width_top = 3
 border_width_right = 3
 border_width_bottom = 3
 border_color = Color(0.4, 0.9, 0.55, 0.8)
-shadow_color = Color(0, 0, 0, 0.4)
-shadow_size = 10
-shadow_offset = Vector2(0, 5)
+content_margin_left = 28.0
+content_margin_top = 20.0
+content_margin_right = 28.0
+content_margin_bottom = 20.0
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_info_bg"]
-bg_color = Color(0.06, 0.28, 0.15, 0.8)
-corner_radius_top_left = 16
-corner_radius_top_right = 16
-corner_radius_bottom_right = 16
-corner_radius_bottom_left = 16
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.3, 0.75, 0.45, 0.6)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_divider"]
-bg_color = Color(0.4, 0.9, 0.55, 0.3)
-corner_radius_top_left = 2
-corner_radius_top_right = 2
-corner_radius_bottom_right = 2
-corner_radius_bottom_left = 2
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_badge"]
+bg_color = Color(0, 0, 0, 0)
+corner_radius_top_left = 28
+corner_radius_top_right = 28
+corner_radius_bottom_right = 28
+corner_radius_bottom_left = 28
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(1, 1, 1, 0.9)
 
 [node name="Home" type="Control"]
 layout_mode = 3
@@ -61,47 +54,167 @@ autoplay = true
 loop = true
 expand = true
 
-[node name="CenterContainer" type="CenterContainer" parent="."]
+[node name="StaminaTimer" type="Timer" parent="."]
+
+[node name="Margin" type="MarginContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_constants/margin_left = 48
+theme_override_constants/margin_top = 96
+theme_override_constants/margin_right = 48
+theme_override_constants/margin_bottom = 96
 
-[node name="PanelContainer" type="PanelContainer" parent="CenterContainer"]
-custom_minimum_size = Vector2(800, 0)
+[node name="Root" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 32
+
+[node name="PlayerPanel" type="PanelContainer" parent="Margin/Root"]
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
-[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/PanelContainer"]
+[node name="VBox" type="VBoxContainer" parent="Margin/Root/PlayerPanel"]
 layout_mode = 2
-theme_override_constants/separation = 40
-size_flags_horizontal = 3
 
-[node name="WelcomeLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer"]
+[node name="NameLabel" type="Label" parent="Margin/Root/PlayerPanel/VBox"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 56
-theme_override_colors/font_color = Color(0.85, 1.0, 0.88, 1)
-theme_override_colors/font_outline_color = Color(0, 0.2, 0.1, 1)
-theme_override_constants/outline_size = 4
-text = "ホーム"
-horizontal_alignment = 1
+text = "名前なし"
+text_overrun_behavior = 3
 
-[node name="Divider" type="PanelContainer" parent="CenterContainer/PanelContainer/VBoxContainer"]
-custom_minimum_size = Vector2(0, 3)
+[node name="Row" type="HBoxContainer" parent="Margin/Root/PlayerPanel/VBox"]
 layout_mode = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_divider")
 
-[node name="InfoBg" type="PanelContainer" parent="CenterContainer/PanelContainer/VBoxContainer"]
+[node name="IdLabel" type="Label" parent="Margin/Root/PlayerPanel/VBox/Row"]
 layout_mode = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_info_bg")
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 36
+text = "ID: -"
+text_overrun_behavior = 3
 
-[node name="UserInfoLabel" type="Label" parent="CenterContainer/PanelContainer/VBoxContainer/InfoBg"]
+[node name="LevelLabel" type="Label" parent="Margin/Root/PlayerPanel/VBox/Row"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 30
-theme_override_colors/font_color = Color(0.8, 1.0, 0.85, 1)
-theme_override_colors/font_outline_color = Color(0, 0.15, 0.07, 1)
-theme_override_constants/outline_size = 2
-text = "ユーザー情報"
-horizontal_alignment = 1
+theme_override_font_sizes/font_size = 48
+text = "Lv.-"
+horizontal_alignment = 2
+
+[node name="StaminaPanel" type="PanelContainer" parent="Margin/Root"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="VBox" type="VBoxContainer" parent="Margin/Root/StaminaPanel"]
+layout_mode = 2
+
+[node name="StaminaTitle" type="Label" parent="Margin/Root/StaminaPanel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+text = "スタミナ"
+
+[node name="StaminaValueLabel" type="Label" parent="Margin/Root/StaminaPanel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 72
+text = "-"
+text_overrun_behavior = 3
+
+[node name="StaminaRemainLabel" type="Label" parent="Margin/Root/StaminaPanel/VBox"]
+custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+text_overrun_behavior = 3
+
+[node name="CurrencyRow" type="HBoxContainer" parent="Margin/Root"]
+layout_mode = 2
+theme_override_constants/separation = 32
+
+[node name="CoinPanel" type="PanelContainer" parent="Margin/Root/CurrencyRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="VBox" type="VBoxContainer" parent="Margin/Root/CurrencyRow/CoinPanel"]
+layout_mode = 2
+
+[node name="CoinTitle" type="Label" parent="Margin/Root/CurrencyRow/CoinPanel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+text = "コイン"
+
+[node name="CoinValueLabel" type="Label" parent="Margin/Root/CurrencyRow/CoinPanel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 56
+text = "-"
+text_overrun_behavior = 3
+
+[node name="DiamondPanel" type="PanelContainer" parent="Margin/Root/CurrencyRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="VBox" type="VBoxContainer" parent="Margin/Root/CurrencyRow/DiamondPanel"]
+layout_mode = 2
+
+[node name="DiamondTitle" type="Label" parent="Margin/Root/CurrencyRow/DiamondPanel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+text = "ダイヤ"
+
+[node name="DiamondValueLabel" type="Label" parent="Margin/Root/CurrencyRow/DiamondPanel/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 56
+text = "-"
+text_overrun_behavior = 3
+
+[node name="Spacer" type="Control" parent="Margin/Root"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="NavRow" type="HBoxContainer" parent="Margin/Root"]
+layout_mode = 2
+theme_override_constants/separation = 32
+
+[node name="MailButton" type="Button" parent="Margin/Root/NavRow"]
+custom_minimum_size = Vector2(0, 160)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 48
+text = "メール"
+
+[node name="MailBadge" type="PanelContainer" parent="Margin/Root/NavRow/MailButton"]
+custom_minimum_size = Vector2(56, 56)
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -72.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 72.0
+grow_horizontal = 0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_badge")
+
+[node name="NoticeButton" type="Button" parent="Margin/Root/NavRow"]
+custom_minimum_size = Vector2(0, 160)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 48
+text = "お知らせ"
+
+[node name="NoticeBadge" type="PanelContainer" parent="Margin/Root/NavRow/NoticeButton"]
+custom_minimum_size = Vector2(56, 56)
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -72.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 72.0
+grow_horizontal = 0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_badge")

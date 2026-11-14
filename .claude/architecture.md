@@ -32,7 +32,7 @@ res://
 │   │   └── data/                 #   api/（呼び出しと応答の型）, local/（保存）, repositories/（契約の実装）
 │   ├── agreement/                # 規約の取得・同意・本文の閲覧、規約画面と閲覧画面
 │   ├── login/                    # POST /auth/login、ログインボーナス画面
-│   ├── player/                   # プレイヤーと所持データの読み取りモデル、ホーム画面
+│   ├── player/                   # プレイヤーと所持データの読み取りモデル、ホーム画面（domain/services/ に表示専用の計算）
 │   └── （今後: gacha / unit / equipment …）
 ├── tests/                        # contexts/・master_data/・core/ をミラー（unit / integration / e2e）
 ├── assets/  addons/  data/  docs/
@@ -91,6 +91,7 @@ presentation ──▶ domain ◀── data（domain の契約を実装する�
 | --- | --- | --- |
 | `presentation/{screen}/` | `.tscn` と `*_presenter.gd` | UI 制御とシグナル接続だけ。業務の判断はしない。UseCase だけを呼ぶ |
 | `domain/entities/` | サーバー状態の読み取りモデル、クライアント固有の状態（セッション・再試行など） | サーバーの項目名に合わせる。基底は `RefCounted`（既定）。`Resource` は下の基準を満たすときだけ |
+| `domain/services/` | **表示専用の計算の純粋関数だけ**（状態を持たない静的関数。例: `player/domain/services/` の `StaminaRecovery`・`DiamondTotal`・`CoinAmount`）。採用の条件は 4 節 | 結果をサーバーへ送らず、保持データも書き換えない。`Node` などに依存しない。UseCase が呼ぶ |
 | `domain/use_cases/` | `*_use_case.gd` と、必要なときだけ結果の型 `*_result.gd` | 入口は `handle()`。1 操作 1 つ。成否だけなら `Result` をそのまま返す。値を返すときだけ専用の結果型（UseCase ごと。共用しない）。`await` してよい |
 | `domain/repositories/` | Repository の**契約**（基底クラス）。テストで偽物に差し替える Repository にだけ作る | メソッドは `push_error("未実装")` を持つ。UseCase はこの型で受ける |
 | `data/api/` | API 呼び出しの部品と、項目の多い API 応答の型（`*_response.gd`） | 応答を型付きに変換し、null と欠落（D3）を処理する。`ApiClient` を使う |
@@ -126,10 +127,11 @@ presentation ──▶ domain ◀── data（domain の契約を実装する�
 | 項目 | 方針 |
 | --- | --- |
 | コンテキスト名 | サーバーの `Domain/{Context}` に揃える。対応が一目で分かり、設計書（サーバー側 `docs/design/`）を引きやすい。**`master_data` は対応する Domain なし**。サーバーの Version（バージョン確認 API）と `mst_*`（各機能のマスター）を、クライアントでは 1 つの共有モジュール `master_data/` にまとめる |
-| エンティティ | **サーバー状態の読み取りモデル**が中心。サーバーの項目名・型に合わせ、独自の計算・判定を足さない |
+| エンティティ | **サーバー状態の読み取りモデル**が中心。サーバーの項目名・型に合わせ、独自の計算・判定を足さない。計算が要る表示は entities に足さず、下の「ドメインサービス」の例外に置く |
 | 集約・不変条件 | **クライアント固有の状態**（画面遷移・再試行の段階・セッション・冪等キー）に限る。例: タイトルの段階（MASTER / AUTH / LOGIN）と失敗した段階の記憶 |
 | 値オブジェクト | 必要になった時点で足す。最初から作らない |
-| ドメインサービス・ドメインイベント | 他コンテキストへの通知は `EventBus` のシグナルで足りる。独自のイベント基盤は作らない |
+| ドメインサービス | **原則採用しない。例外**: 表示専用の計算（F9 の例外。home-player-info の「スタミナの自然回復の表示」と「ダイヤの合算」）の純粋関数に限り、`contexts/{context}/domain/services/` に置いてよい。条件は、状態を持たない静的関数であること・結果をサーバーへ送らず保持データも書き換えないこと・サーバーの式と一致させる単体テストがあること。ルールの判定（サーバーが決めること）は置かない |
+| ドメインイベント | 他コンテキストへの通知は `EventBus` のシグナルで足りる。独自のイベント基盤は作らない |
 
 迷ったときは「サーバーが決めることか」で判断する。サーバーが決めることは、クライアントでは表示用の読み取りモデルにとどめる。
 

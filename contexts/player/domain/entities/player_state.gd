@@ -72,6 +72,14 @@ static func is_row_deleted(row: Dictionary) -> bool:
 	return false
 
 
+## 数量・件数の値を整数にする。JSON の数値は float で来るので int() に直す。
+## 数値以外（null・文字列・キー無しの既定値以外）は 0。int(null) などでエラーにしないための入口。
+static func to_int(value: Variant) -> int:
+	if value is int or value is float:
+		return int(value)
+	return 0
+
+
 ## ログイン前（またはセッション破棄後）で何も持っていないか。
 ## 判定は sys_player と trx_lists だけ（trx_diamond は含めない。ログイン後は sys_player が非空で足りる）。
 func is_empty() -> bool:

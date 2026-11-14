@@ -26,13 +26,18 @@
 ##                          429 は dwell と、再試行ボタンが有効になるまでの両方を待つ）
 ##   --e2e-view-terms       規約画面で、最初の規約の「確認する」を押して閲覧画面を開き、dwell 秒止まる →
 ##                          本文を数回スクロールして下を見せる → 「閉じる」を押す → 既存どおり同意ボタンへ（動画用）
+##   --e2e-home-hold=<秒>   ホームで止まる秒数。HOME_QUIT_DELAY（2 秒）+ --e2e-dwell に加算する（置き換えない。既定 0。
+##                          スタミナの回復を画面に出し続けて撮るため。--e2e-dwell は全画面に効くので別にする）
+##   --e2e-clock-skew=<秒>  端末時計のずれ（AppContext.debug_clock().skew_seconds）。正なら端末が進んでいる
+##                          （サーバー時刻のオフセット補正の確認）
+##   --e2e-omit-platform    X-Platform を付けない状態にする（api_client().set_platform("")。99003 の表示の確認）
 ##   --e2e-timeout=<秒>     この秒数で打ち切る（既定 120。コード 1）
 ## クリックの送り方: 実際のマウス操作に近づけ、移動 → 押下 → 数フレーム → 解放の順に送る（動画で押下の
 ##   見た目が出る）。座標はビューポート座標で指定し、ウィンドウ座標へ変換して送る（下の make_* と
 ##   to_window_position。画面より大きい解像度でウィンドウが縮むと、そのままでは別の場所を押すため）。
 ## 操作（画面ごと。シーンのパスで判定する）:
 ##   タイトル: 再試行ボタンが見えて押せるなら押す / 規約: 再試行 → 同意ボタンの順に押す
-##   ログインボーナス: 画面中央をクリック / ホーム: 2 秒後に終了
+##   ログインボーナス: 画面中央をクリック / ホーム: 2 秒（+ dwell + home-hold）後にホームの値を出して終了
 ## 出力: `E2E: ...` の行に経過、最後に `E2E_RESULT: OK ...`（コード 0）か `E2E_RESULT: TIMEOUT ...`（コード 1）。
 ##       トークン・秘密鍵・device_id は出さない。
 extends Node
@@ -92,6 +97,11 @@ var _tokens_corrupted: bool = false
 var _terms_phase: TermsPhase = TermsPhase.OPEN
 var _terms_time: float = 0.0
 var _terms_scrolls: int = 0
+## ホームで止まる追加の秒数（--e2e-home-hold）
+var _home_hold: float = 0.0
+## ホームに入った最初の値（login_stamina・open_stamina の出力用）。入るまでは null
+var _home_open_summary: HomeSummary = null
+var _home_open_stamina: int = -1
 
 
 func _ready() -> void:
@@ -104,6 +114,15 @@ func _ready() -> void:
 	print("E2E: ドライバー有効 case=", _args.get("e2e-case", _args.get("e2e", "")), " args=", _args)
 	_timeout = float(_args.get("e2e-timeout", 120))
 	_dwell = float(_args.get("e2e-dwell", 0))
+	_home_hold = home_hold_seconds(_args)
+
+	# --- 0. 端末時計のずれ・X-Platform の省略（ホームの確認用） ---
+	if _args.has("e2e-clock-skew"):
+		AppContext.debug_clock().skew_seconds = clock_skew_seconds(_args)
+		print("E2E: 端末時計のずれ ", AppContext.debug_clock().skew_seconds, " 秒")
+	if _args.has("e2e-omit-platform"):
+		AppContext.api_client().set_platform("")
+		print("E2E: X-Platform を付けません")
 
 	# --- 1. 保存の消去（新規ユーザーの再現） ---
 	# AppContext は 2 番目のオートロードで、もう組み立て済み。トークンと device_id は保存の窓口から消す
@@ -154,10 +173,98 @@ func _process(delta: float) -> void:
 				_scene_time = 0.0
 				_click_at(get_viewport().get_visible_rect().size / 2.0)
 		SceneRouter.HOME_SCENE:
+			_record_home_open()
 			_maybe_shot("home")
-			if _scene_time > HOME_QUIT_DELAY + _dwell:
-				print("E2E_RESULT: OK player_id=", AppContext.get_player_id_use_case().handle())
+			if _scene_time > HOME_QUIT_DELAY + _dwell + _home_hold:
+				print(_home_result_line())
 				_quit(0)
+
+
+# --- ホームの値 ---
+
+
+## ホームに入った最初のフレームで、login 時点の値とホームの最初の表示値を記録する（1 回だけ）。
+## 二重加算の確認（open_stamina が login_stamina と一致するか）に使う。
+func _record_home_open() -> void:
+	if _home_open_summary != null:
+		return
+	_home_open_summary = AppContext.get_home_summary_use_case().handle()
+	var display := AppContext.get_stamina_display_use_case().handle(
+		_home_open_summary.stamina_source
+	)
+	_home_open_stamina = display.current
+
+
+## 終了時に出す E2E_RESULT の行。画面の文字ではなく、UseCase の結果を出す（目視と照合する）。
+func _home_result_line() -> String:
+	var summary := AppContext.get_home_summary_use_case().handle()
+	var display := AppContext.get_stamina_display_use_case().handle(summary.stamina_source)
+	var login_stamina := summary.stamina_source.current
+	if _home_open_summary != null:
+		login_stamina = _home_open_summary.stamina_source.current
+	return format_home_result(
+		summary, display, login_stamina, _home_open_stamina, _server_time_offset_text()
+	)
+
+
+## サーバー時刻のオフセット（秒）。Date が読めていなければ "none"。
+func _server_time_offset_text() -> String:
+	var state := AppContext.debug_player_state()
+	if not state.has_server_time:
+		return "none"
+	return str(state.server_time_offset_seconds)
+
+
+## --e2e-home-hold の値（秒）。無い・数値でない・負は 0。
+static func home_hold_seconds(args: Dictionary) -> float:
+	var value: Variant = args.get("e2e-home-hold", null)
+	if value is String and value.is_valid_float():
+		return maxf(0.0, value.to_float())
+	return 0.0
+
+
+## --e2e-clock-skew の値（秒。負も可）。無い・整数でない（値なしの true を含む）は 0。
+static func clock_skew_seconds(args: Dictionary) -> int:
+	var value: Variant = args.get("e2e-clock-skew", null)
+	if value is String and value.is_valid_int():
+		return value.to_int()
+	return 0
+
+
+## E2E_RESULT: OK の行を作る。形（設計 8-2）:
+##   player_id=… name=… level=… stamina=現在値/最大値 remain=… coin=… diamond=…
+##   login_stamina=… open_stamina=… offset=…
+## 最大値が不明なら stamina は「42/--」、残り時間なしなら remain は none、スタミナ行なしは stamina=none。
+static func format_home_result(
+	summary: HomeSummary,
+	display: StaminaDisplay,
+	login_stamina: int,
+	open_stamina: int,
+	offset_text: String
+) -> String:
+	var stamina := "none"
+	if display.is_present:
+		var max_text := "--" if display.max_stamina < 0 else str(display.max_stamina)
+		stamina = "%d/%s" % [display.current, max_text]
+	var remain := "none" if display.seconds_to_next < 0 else str(display.seconds_to_next)
+	return (
+		(
+			"E2E_RESULT: OK player_id=%s name=%s level=%d stamina=%s remain=%s coin=%d diamond=%d"
+			+ " login_stamina=%d open_stamina=%d offset=%s"
+		)
+		% [
+			summary.player_id,
+			summary.player_name,
+			summary.level,
+			stamina,
+			remain,
+			summary.coin,
+			summary.diamond_total,
+			login_stamina,
+			open_stamina,
+			offset_text,
+		]
+	)
 
 
 # --- 画面ごとの操作 ---

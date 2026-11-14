@@ -78,13 +78,15 @@ NexusGodotMobileGameClient/
   ↓    既存ユーザー: POST /api/auth/sign_in（10002 → sign_up、10004 → sign_in に 1 回だけ切り替える）
   ↓    access_token / refresh_token 取得・保存
   ↓ 3. POST /api/auth/login (Bearer認証・冪等キー付き)
-  ↓    sys_player・trx 一覧 6 種（unit / item / wallet / diamond / equipment / stamina）・login_bonus_list を取得
+  ↓    sys_player・trx 一覧 5 種（unit / item / wallet / equipment / stamina）と有償ダイヤ `trx_diamond`（単数）・login_bonus_list を取得
   ↓    login が成功するまで先へ進まない（失敗はタイトル上のエラー表示と「再試行」）
   ↓
 規約画面（GET /api/agreement/pending。未同意が無ければ見えない。同意は POST /api/agreement/consent）
   ↓
 ログインボーナス画面（通信しない）→ ホーム画面
 ```
+
+ホーム画面は通信せず、login の値とローカルのマスターで描く。上から、プレイヤー（名前・ID・レベル）、スタミナ（「現在値 / 最大値」と次の回復までの残り時間）、通貨（コイン・ダイヤの合計）、下にメール・お知らせのボタン（枠だけで押しても何も起きない）と未読バッジの枠。スタミナの回復は login 応答の値を起点にクライアントで表示用に計算する（1 秒ごとに更新し、バックグラウンドから戻ったときはその場で計算し直す。最大値・回復間隔が分からないときは回復を計算しない）。ダイヤは `trx_diamond` の有償・無償と `trx_item_list` の `free_diamond` の合計。設計は `docs/design/home-player-info/client_design.md`。
 
 規約画面の「確認する」は、規約の URL（`sys_agreement.url`。絶対 URL か `/legal/...` のような相対パス。相対パスは API の origin に付ける）から HTML を取得して、アプリ内の閲覧画面（`terms_viewer`）に描く。許可するタグは `h1`〜`h3` `p` `br` `ul` `ol` `li` `strong` `b` `em` `i` `a href`（http / https のみ）`hr`（変換は `html_to_bbcode.gd`）。取得に失敗したら、エラー文と「再試行」「ブラウザで開く」を出す。
 
@@ -141,6 +143,8 @@ godot --path . -- --e2e-case=smoke --e2e-fail-login=503 --e2e-no-retry   # login
 ```
 
 規約の閲覧画面まで撮るときは `--e2e-view-terms` を付ける（最初の規約の「確認する」→ 閲覧 → スクロール → 「閉じる」→ 同意）。サーバーの規約 URL が配信されていないと、閲覧画面はエラー表示になる。取得・変換・描画だけを確かめるなら `godot --path . --resolution 540x960 res://debug/verify_terms_viewer.tscn -- <画像の出力先>`（認証なし）。
+
+ホームの確認には `--e2e-home-hold=<秒>`（ホームに留まる秒数を足す）、`--e2e-clock-skew=<秒>`（端末時計のずれを作る）、`--e2e-omit-platform`（`X-Platform` を付けない）が使える。終了時の `E2E_RESULT: OK` にホームの値（スタミナ・コイン・ダイヤ・`login_stamina`・`open_stamina`・`offset`）が出る。
 
 引数の一覧は `debug/e2e_driver.gd` の冒頭。sign_up は IP あたり 10 回/時間の上限があるので、`--e2e-reset` を繰り返さない。ボタンのクリックはヘッドレス（`--headless`）では効かないので、再試行ボタンの操作を含むケースは通常起動で動かす。
 

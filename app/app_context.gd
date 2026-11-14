@@ -1,9 +1,11 @@
+# gdlint: disable=max-public-methods
 ## 依存の組み立て（合成ルート。architecture.md 3 節 app、client_design.md 2-1）。
 ##
 ## 目的: ApiClient・各 Repository の実装・UseCase を生成して結ぶ唯一の場所。presenter（第 3 段）は
 ##       オートロード名 AppContext の取得メソッド（login_use_case() など）で UseCase だけを受け取る。
 ##       また、ApiClient の 2 つのシグナルを EventBus へ中継し、EventBus の受け手を登録する。
 ## 注意:
+##   - 先頭の gdlint の指定は公開メソッド数の上限（20）を外すもの。合成ルートは UseCase の取得メソッドが増えるのが本来の姿
 ##   - オートロード用のスクリプトなので class_name を付けない（付けるとオートロード名と衝突する。依存チェック L1）。
 ##     project.godot の [autoload] に 2 番目（EventBus の次）で登録している。テストは
 ##     load("res://app/app_context.gd").new() で別の Node として生成し、add_child する
@@ -53,6 +55,8 @@ var _get_access_token_use_case: GetAccessTokenUseCase
 var _player_repository: PlayerRepository
 var _apply_login_data_use_case: ApplyLoginDataUseCase
 var _get_player_id_use_case: GetPlayerIdUseCase
+var _get_home_summary_use_case: GetHomeSummaryUseCase
+var _get_stamina_display_use_case: GetStaminaDisplayUseCase
 
 # --- login ---
 var _login_bonus_repository: LoginBonusRepository
@@ -118,6 +122,16 @@ func get_player_id_use_case() -> GetPlayerIdUseCase:
 	return _get_player_id_use_case
 
 
+## ホームの表示値の束を作る（ホームを開いたときとマスター更新時）。
+func get_home_summary_use_case() -> GetHomeSummaryUseCase:
+	return _get_home_summary_use_case
+
+
+## スタミナの表示値を now 時点で求める（tick・復帰のたび）。
+func get_stamina_display_use_case() -> GetStaminaDisplayUseCase:
+	return _get_stamina_display_use_case
+
+
 func get_login_bonuses_use_case() -> GetLoginBonusesUseCase:
 	return _get_login_bonuses_use_case
 
@@ -151,6 +165,12 @@ func debug_auth_token_repository() -> LocalAuthTokenRepository:
 ## 製品の画面は使わない（時刻は UseCase が Clock の契約で受け取る）。
 func debug_clock() -> SystemClock:
 	return _clock
+
+
+## 保持中のプレイヤー状態（サーバー時刻のオフセットなどを e2e の出力に出すため。読み取り専用で使う）。
+## 製品の画面は使わない（値は UseCase が返す）。
+func debug_player_state() -> PlayerState:
+	return _player_repository.current()
 
 
 # --- mst の Repository（master_data。読み取りのみ。各コンテキストの UseCase が使う） ---
@@ -220,6 +240,10 @@ func _build() -> void:
 	_player_repository = LocalPlayerRepository.new()
 	_apply_login_data_use_case = ApplyLoginDataUseCase.new(_player_repository)
 	_get_player_id_use_case = GetPlayerIdUseCase.new(_player_repository)
+	_get_home_summary_use_case = GetHomeSummaryUseCase.new(
+		_player_repository, _mst_player_level_repository, _mst_config_repository
+	)
+	_get_stamina_display_use_case = GetStaminaDisplayUseCase.new(_player_repository, _clock)
 	# login
 	_login_bonus_repository = LocalLoginBonusRepository.new()
 	_login_use_case = LoginUseCase.new(

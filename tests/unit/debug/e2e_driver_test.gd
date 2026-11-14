@@ -72,3 +72,51 @@ func test_is_enabled_only_in_debug_build() -> void:
 func test_is_enabled_requires_e2e_argument() -> void:
 	assert_bool(load(DRIVER).is_enabled({}, true)).is_false()
 	assert_bool(load(DRIVER).is_enabled({"e2e-reset": true}, true)).is_false()
+
+
+## --e2e-home-hold: 秒の値を読む。無い・値なし（true）・数値でない・負は 0。
+func test_home_hold_seconds() -> void:
+	var driver: GDScript = load(DRIVER)
+	assert_float(driver.home_hold_seconds({"e2e-home-hold": "5"})).is_equal(5.0)
+	assert_float(driver.home_hold_seconds({"e2e-home-hold": "2.5"})).is_equal(2.5)
+	assert_float(driver.home_hold_seconds({})).is_equal(0.0)
+	assert_float(driver.home_hold_seconds({"e2e-home-hold": true})).is_equal(0.0)
+	assert_float(driver.home_hold_seconds({"e2e-home-hold": "abc"})).is_equal(0.0)
+	assert_float(driver.home_hold_seconds({"e2e-home-hold": "-3"})).is_equal(0.0)
+
+
+## --e2e-clock-skew: 整数の秒（負も可）。無い・値なし・整数でないは 0。
+func test_clock_skew_seconds() -> void:
+	var driver: GDScript = load(DRIVER)
+	assert_int(driver.clock_skew_seconds({"e2e-clock-skew": "3600"})).is_equal(3600)
+	assert_int(driver.clock_skew_seconds({"e2e-clock-skew": "-3600"})).is_equal(-3600)
+	assert_int(driver.clock_skew_seconds({})).is_equal(0)
+	assert_int(driver.clock_skew_seconds({"e2e-clock-skew": true})).is_equal(0)
+	assert_int(driver.clock_skew_seconds({"e2e-clock-skew": "1.5"})).is_equal(0)
+
+
+## E2E_RESULT の行: 設計 8-2 の項目を、スタミナありと最大値不明・行なしの両方で出す。
+func test_format_home_result() -> void:
+	var driver: GDScript = load(DRIVER)
+	var summary := HomeSummary.new()
+	summary.player_id = "ABCD1234"
+	summary.player_name = "taro"
+	summary.level = 1
+	summary.coin = 1000
+	summary.diamond_total = 50
+	var line: String = driver.format_home_result(
+		summary, StaminaDisplay.new(46, 50, 12, true), 45, 45, "0"
+	)
+	assert_str(line).is_equal(
+		(
+			"E2E_RESULT: OK player_id=ABCD1234 name=taro level=1 stamina=46/50 remain=12 coin=1000"
+			+ " diamond=50 login_stamina=45 open_stamina=45 offset=0"
+		)
+	)
+	var unknown: String = driver.format_home_result(
+		summary, StaminaDisplay.new(42, -1, -1, true), 42, 42, "none"
+	)
+	assert_str(unknown).contains("stamina=42/-- remain=none")
+	assert_str(unknown).contains("offset=none")
+	var absent: String = driver.format_home_result(summary, StaminaDisplay.new(), 0, 0, "none")
+	assert_str(absent).contains("stamina=none")
