@@ -16,6 +16,8 @@
 | `Authorization: Bearer {access_token}` | 送信 | 認証付き API。`ApiClient` が付ける（sign_up / sign_in / version / refresh には付けない） |
 | `X-Unique-Request-Identifier` | 送信 | 冪等キー（UUID v4）。**login と consent に付ける**。寿命は「ひとつの操作」で、presenter が持つ。通信断・409・503 の再送では同じキー、業務エラー（299）の後は作り直す（client_design.md 3-4） |
 | `X-Master-Hash` | 送信 | 端末が持つマスターのハッシュ。空でなければ全リクエストに付ける |
+| `X-Platform: Apple` / `Google` | 送信 | 端末の platform。**`ApiClient.request()` を通る全リクエストに `_build_headers()` の 1 か所で付ける**（refresh・`GET /auth/version` を含む）。`download()`（配信ホスト・規約本文）と Toast の `/broadcasting/auth` には付けない。署名には含めない。値は `ApiConfig.platform()`: 環境変数 `NEXUS_PLATFORM` → `[nexus]` の `platform` → OS の既定（iOS → Apple、Android → Google、それ以外 → Apple）。許可値は `Apple` / `Google`（大文字小文字は区別せず正規形に直す）で、不正値は警告して OS の既定に戻す。欠落・不正はサーバーが HTTP 299 / `error_code` 99003 で拒否する（画面は汎用の BUSINESS 表示のまま、`push_error` を 1 回出す）。`set_platform("")` で付けない状態を作れる（e2e 専用） |
+| `Date` | 受信 | login 応答の `Date` からサーバー時刻とのオフセット（サーバー時刻 − 端末時刻）を作り、`PlayerState` に持つ（スタミナの回復表示の基準。login のたびに更新）。無い・読めないときは端末時計のみ |
 | `X-Master-Update-Required: true` | 受信 | HTTP 200 の応答に付く。マスターを裏で更新する（`master_data`）。version API の応答では無視する |
 | `X-Client-Timestamp` / `X-Client-Nonce` / `X-Client-Signature` | 送信 | sign_up の署名（下記） |
 
@@ -97,7 +99,9 @@ X-Client-Signature: HMAC-SHA256("{timestamp}:{nonce}:{request_body}")
 | 項目 | 保持先 |
 |------|--------|
 | `sys_player` | `player` の Repository（`my_id` がプレイヤー ID）。`total_paid_amount` は文字列（`"0.00"`）、`vip_point` は整数 |
-| `trx_unit_list` / `trx_item_list` / `trx_wallet_list` / `trx_diamond_list` / `trx_equipment_list` / `trx_stamina_list` | `player` の Repository（要素は Dictionary のまま。キーが無い・null は空配列として扱う） |
+| `trx_unit_list` / `trx_item_list` / `trx_wallet_list` / `trx_equipment_list` / `trx_stamina_list` | `player` の Repository（要素は Dictionary のまま。キーが無い・null は空配列として扱う。新規ユーザーにも stamina・wallet・item の行が入る） |
+| `trx_diamond` | `player` の Repository（`PlayerState.trx_diamond`）。**単数のオブジェクト**（`X-Platform` の platform の 1 行。有償は `paid_amount`）。行が無い・null・型違いは空の辞書。旧キー `trx_diamond_list` は読まない |
+| `is_delete`（各行） | 真偽値。移行の間は 0/1 も来うるので `PlayerState.is_row_deleted()` で読む |
 | `login_bonus_list` | `login` の Repository。要素は `unique_id` / `type` / `id` / `amount` / `expire_at`（常に null）/ `metadata`（null 可。`grade` があるときだけグレードを表示する） |
 
 保持はメモリのみ（永続化しない）。

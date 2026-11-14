@@ -81,8 +81,8 @@ presentation ──▶ domain ◀── data（domain の契約を実装する�
 
 | 層 | 置くもの |
 | --- | --- |
-| `core/domain/` | `Result`（成功/失敗の基底）、`AppError`（失敗の種別 `kind`・`error_code`・`message`・`retry_after`・メンテナンス情報）、`EventBus`、`JsonReader`（null と欠落を同一に扱う読み取り）。API クライアントから見た契約（トークンの供給 `ApiAuthProvider`〔refresh の送信は `ApiClient` が持つ〕、`master_hash` の供給 `MasterHashProvider`）もここに置き、実装は contexts が持つ。`EventBus` はオートロードで、`class_name` を付けない。依存チェック D2 は、`project.godot` の `[autoload]` に登録済みのオートロードだけ `core/domain` の Node 継承を許すので、登録しておく |
-| `core/data/` | `http/ApiClient`（HTTP の窓口。分類・401 の自動 refresh・冪等キー・`X-Master-*` ヘッダー）、`http/ApiResult`（通信結果の値）、`config/ApiConfig`（ベース URL・配信ホスト・Reverb の接続先と認証 URL。環境変数 `NEXUS_*` → `project.godot` の `[nexus]` → 既定値の順）、`storage/`（ファイル・設定の薄い入れ物） |
+| `core/domain/` | `Result`（成功/失敗の基底）、`AppError`（失敗の種別 `kind`・`error_code`・`message`・`retry_after`・メンテナンス情報）、`EventBus`、`JsonReader`（null と欠落を同一に扱う読み取り）、`Clock`（端末の現在時刻の契約。実装は `core/data/clock/SystemClock`）、`ServerDatetime`（サーバーの時刻文字列 `Y-m-d H:i:s`〔UTC〕を UNIX 秒に読む純粋関数。読めなければ -1）。API クライアントから見た契約（トークンの供給 `ApiAuthProvider`〔refresh の送信は `ApiClient` が持つ〕、`master_hash` の供給 `MasterHashProvider`）もここに置き、実装は contexts が持つ。`EventBus` はオートロードで、`class_name` を付けない。依存チェック D2 は、`project.godot` の `[autoload]` に登録済みのオートロードだけ `core/domain` の Node 継承を許すので、登録しておく |
+| `core/data/` | `http/ApiClient`（HTTP の窓口。分類・401 の自動 refresh・冪等キー・`X-Master-*`・`X-Platform` ヘッダー）、`http/ApiResult`（通信結果の値）、`http/HttpDate`（`Date` ヘッダーの解釈）、`clock/SystemClock`（端末時計。デバッグ用に `skew_seconds`）、`config/ApiConfig`（ベース URL・配信ホスト・Reverb の接続先と認証 URL。環境変数 `NEXUS_*` → `project.godot` の `[nexus]` → 既定値の順）、`storage/`（ファイル・設定の薄い入れ物） |
 | `core/presentation/` | `Toast`（オートロード）、ローディング、エラーダイアログなどの共通 UI。エラー種別ごとの表示文言の共通部分もここ |
 
 ### contexts/{context}

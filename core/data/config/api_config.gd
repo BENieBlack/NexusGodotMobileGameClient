@@ -10,6 +10,7 @@
 ## [nexus] の reverb_host / reverb_port / reverb_scheme / reverb_app_key、既定値 DEFAULT_REVERB_*）。
 ## チャンネル認証の URL（/broadcasting/auth）は Reverb のサーバーではなく API サーバーのルートにあるので、
 ## API のベース URL（api_base_url）の origin（スキーム + ホスト + ポート）から作る。
+## X-Platform の値も同じ順で決める（NEXUS_PLATFORM、[nexus] の platform、OS の既定。platform()）。
 ## 返す値は末尾の "/" を除く（呼び出し側が "/auth/..." を連結するため、二重スラッシュを避ける）。
 ## リリースビルドでの切り替え方は別機能（client_design.md 8 節 4。仮置き）。
 class_name ApiConfig
@@ -31,12 +32,18 @@ const ENV_REVERB_HOST := "NEXUS_REVERB_HOST"
 const ENV_REVERB_PORT := "NEXUS_REVERB_PORT"
 const ENV_REVERB_SCHEME := "NEXUS_REVERB_SCHEME"
 const ENV_REVERB_APP_KEY := "NEXUS_REVERB_APP_KEY"
+const ENV_PLATFORM := "NEXUS_PLATFORM"
 const SETTING_API_BASE_URL := "nexus/api_base_url"
 const SETTING_MASTER_BASE_URL := "nexus/master_base_url"
 const SETTING_REVERB_HOST := "nexus/reverb_host"
 const SETTING_REVERB_PORT := "nexus/reverb_port"
 const SETTING_REVERB_SCHEME := "nexus/reverb_scheme"
 const SETTING_REVERB_APP_KEY := "nexus/reverb_app_key"
+const SETTING_PLATFORM := "nexus/platform"
+
+## X-Platform ヘッダーの許可値（サーバー api.md 10 節。完全一致）
+const PLATFORM_APPLE := "Apple"
+const PLATFORM_GOOGLE := "Google"
 
 
 ## API のベース URL（例: http://localhost:8090/api）。
@@ -96,6 +103,52 @@ static func api_origin() -> String:
 ## Toast へ渡す、Reverb の接続先と認証先の入れ物を作る。
 static func reverb_endpoint() -> ReverbEndpoint:
 	return ReverbEndpoint.new(reverb_ws_url(), broadcasting_auth_url())
+
+
+## X-Platform ヘッダーの値（"Apple" か "Google"）。client_design.md 5-2。
+## 優先順: 環境変数 NEXUS_PLATFORM → [nexus] の platform → OS の既定。
+## 上書きの値が不正なときは警告を出して OS の既定に戻す（誤った値で全 API が 99003 になるのを避ける）。
+static func platform() -> String:
+	return resolve_platform(
+		OS.get_environment(ENV_PLATFORM),
+		str(ProjectSettings.get_setting(SETTING_PLATFORM, "")),
+		OS.get_name()
+	)
+
+
+## platform() の決定ロジック（純粋関数。環境変数・設定・OS 名を引数で受けるのでテストしやすい）。
+## 空文字は「未設定」とみなして次の候補へ進む。値は前後の空白を除き、大文字小文字を区別せず
+## 正規形（Apple / Google）に直す。それ以外は警告して OS の既定を返す。
+static func resolve_platform(env_value: String, setting_value: String, os_name: String) -> String:
+	for override_value in [env_value, setting_value]:
+		var trimmed: String = override_value.strip_edges()
+		if trimmed == "":
+			continue
+		var normalized := _normalize_platform(trimmed)
+		if normalized != "":
+			return normalized
+		push_warning("X-Platform の設定値が不正です（%s）。Apple / Google のどちらかを指定してください。OS の既定に戻します" % trimmed)
+		return platform_from_os_name(os_name)
+	return platform_from_os_name(os_name)
+
+
+## OS 名（OS.get_name()）から既定の platform を決める。iOS → Apple、Android → Google、
+## それ以外（macOS・Windows・Linux・Web・エディタ）は Apple（サーバーの付与の既定・開発シードに揃える）。
+static func platform_from_os_name(os_name: String) -> String:
+	if os_name == "Android":
+		return PLATFORM_GOOGLE
+	return PLATFORM_APPLE
+
+
+## 許可値なら正規形を、そうでなければ空文字を返す（大文字小文字を区別しない）。
+static func _normalize_platform(value: String) -> String:
+	match value.to_lower():
+		"apple":
+			return PLATFORM_APPLE
+		"google":
+			return PLATFORM_GOOGLE
+		_:
+			return ""
 
 
 ## URL の origin（スキーム + ホスト + ポート）を返す。"://" が無い値はそのまま（末尾の / は除く）返す。

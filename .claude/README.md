@@ -129,7 +129,7 @@ Godot 4 でこのディレクトリを開いてください。
 1. 環境変数 `NEXUS_API_BASE_URL` / `NEXUS_MASTER_BASE_URL`
 2. `project.godot` の `[nexus]` セクション（`api_base_url` / `master_base_url`）
 
-Reverb（通知の WebSocket）の接続先も同じ順で決まります（環境変数 `NEXUS_REVERB_HOST` / `NEXUS_REVERB_PORT` / `NEXUS_REVERB_SCHEME` / `NEXUS_REVERB_APP_KEY`、`[nexus]` の `reverb_host` / `reverb_port` / `reverb_scheme` / `reverb_app_key`）。チャンネル認証の URL は API のベース URL から決まります。アプリキーの既定値（`nexus-local-key`）はローカル開発用なので、製品や他環境では `NEXUS_REVERB_APP_KEY` か `[nexus]` の `reverb_app_key` で上書きします。
+Reverb（通知の WebSocket）の接続先も同じ順で決まります（環境変数 `NEXUS_REVERB_HOST` / `NEXUS_REVERB_PORT` / `NEXUS_REVERB_SCHEME` / `NEXUS_REVERB_APP_KEY`、`[nexus]` の `reverb_host` / `reverb_port` / `reverb_scheme` / `reverb_app_key`）。`X-Platform` の値も同じ順で決まります（環境変数 `NEXUS_PLATFORM`、`[nexus]` の `platform`、OS の既定。許可値は `Apple` / `Google`）。チャンネル認証の URL は API のベース URL から決まります。アプリキーの既定値（`nexus-local-key`）はローカル開発用なので、製品や他環境では `NEXUS_REVERB_APP_KEY` か `[nexus]` の `reverb_app_key` で上書きします。
 
 ### 4. 通しの動作確認（e2e ドライバー）
 
@@ -182,9 +182,9 @@ godot --path . -- --e2e-case=smoke --e2e-fail-login=503 --e2e-no-retry   # login
   "trx_unit_list": [...],
   "trx_item_list": [...],
   "trx_wallet_list": [...],
-  "trx_diamond_list": [...],
   "trx_equipment_list": [...],
   "trx_stamina_list": [...],
+  "trx_diamond": { "platform": "Apple", "paid_amount": 0, ... },  // 単数。行が無ければ null
   "login_bonus_list": [
     { "unique_id": "...", "type": "gold", "id": "gold", "amount": 100, "expire_at": null, "metadata": null }
   ]

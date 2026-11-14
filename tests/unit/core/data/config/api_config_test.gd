@@ -163,3 +163,48 @@ func test_reverb_endpoint_holds_both_urls() -> void:
 	var endpoint := ApiConfig.reverb_endpoint()
 	assert_str(endpoint.ws_url).is_equal(ApiConfig.reverb_ws_url())
 	assert_str(endpoint.auth_url).is_equal(ApiConfig.broadcasting_auth_url())
+
+
+# --- X-Platform（client_design.md 5-2） ---
+
+
+## 前提: OS 名だけ。期待: iOS → Apple、Android → Google、それ以外（macOS・Windows・Linux・Web）→ Apple。
+func test_platform_from_os_name() -> void:
+	assert_str(ApiConfig.platform_from_os_name("iOS")).is_equal("Apple")
+	assert_str(ApiConfig.platform_from_os_name("Android")).is_equal("Google")
+	for os_name in ["macOS", "Windows", "Linux", "Web", ""]:
+		assert_str(ApiConfig.platform_from_os_name(os_name)).is_equal("Apple")
+
+
+## 前提: 環境変数・設定・OS 名の組み合わせ。期待: 環境変数 → 設定 → OS の既定の順。空文字は未設定。
+func test_resolve_platform_priority() -> void:
+	assert_str(ApiConfig.resolve_platform("", "", "Android")).is_equal("Google")
+	assert_str(ApiConfig.resolve_platform("", "Google", "iOS")).is_equal("Google")
+	assert_str(ApiConfig.resolve_platform("Apple", "Google", "Android")).is_equal("Apple")
+	assert_str(ApiConfig.resolve_platform("  ", "Google", "iOS")).is_equal("Google")
+
+
+## 前提: 大文字小文字・前後の空白が違う許可値。期待: 正規形（Apple / Google）に直る。
+func test_resolve_platform_normalizes_case_and_whitespace() -> void:
+	assert_str(ApiConfig.resolve_platform("google", "", "iOS")).is_equal("Google")
+	assert_str(ApiConfig.resolve_platform(" APPLE ", "", "Android")).is_equal("Apple")
+
+
+## 前提: 許可値でない上書き（iOS・Windows など）。期待: 警告を出して OS の既定に戻る
+## （次の候補の設定値にも落ちない）。
+func test_resolve_platform_invalid_override_falls_back_to_os_default() -> void:
+	assert_str(ApiConfig.resolve_platform("iOS", "Google", "Android")).is_equal("Google")
+	assert_str(ApiConfig.resolve_platform("iOS", "Google", "macOS")).is_equal("Apple")
+	assert_str(ApiConfig.resolve_platform("", "Windows", "Android")).is_equal("Google")
+
+
+## 前提: 環境変数と [nexus] の設定を実際に入れる。期待: platform() が環境変数 → 設定の順で読む。
+func test_platform_reads_environment_then_project_setting() -> void:
+	var saved: Variant = ProjectSettings.get_setting(ApiConfig.SETTING_PLATFORM, null)
+	OS.unset_environment(ApiConfig.ENV_PLATFORM)
+	ProjectSettings.set_setting(ApiConfig.SETTING_PLATFORM, "Google")
+	assert_str(ApiConfig.platform()).is_equal("Google")
+	OS.set_environment(ApiConfig.ENV_PLATFORM, "apple")
+	assert_str(ApiConfig.platform()).is_equal("Apple")
+	OS.unset_environment(ApiConfig.ENV_PLATFORM)
+	ProjectSettings.set_setting(ApiConfig.SETTING_PLATFORM, saved)

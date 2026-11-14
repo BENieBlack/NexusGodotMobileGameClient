@@ -13,7 +13,7 @@
 - 設計は Nexus リポジトリ（`docs/requirements/` と `docs/design/`）と、サーバーの `docs/design/<機能>/` が正本。クライアントの設計は `docs/design/<機能>/client_design.md` に置き、仕様を複製しない
 - マージ済みの設計と食い違う実装が要るときは、実装で吸収せず設計の修正を先に出す
 - 仕上げに `make check-quiet`（依存方向 → lint → format → テスト）を通す。実装中は関係するテストだけ回す。全文のログは `.make-logs/` を必要な部分だけ読む
-- 接続先は `ApiConfig`（`core/data/config/`）の 1 か所で、環境変数 → `project.godot` の `[nexus]` → 既定値の順に決まる: `NEXUS_API_BASE_URL` / `NEXUS_MASTER_BASE_URL`、Reverb は `NEXUS_REVERB_HOST` / `_PORT` / `_SCHEME` / `_APP_KEY`（`[nexus]` は `api_base_url` `master_base_url` `reverb_host` `reverb_port` `reverb_scheme` `reverb_app_key`）。Reverb のアプリキーの既定値は `nexus-local-key`（ローカル開発用。製品・他環境では `NEXUS_REVERB_APP_KEY` か `[nexus]` で上書き）。URL を直書きしない（[api.md](.claude/api.md)）
+- 接続先は `ApiConfig`（`core/data/config/`）の 1 か所で、環境変数 → `project.godot` の `[nexus]` → 既定値の順に決まる: `NEXUS_API_BASE_URL` / `NEXUS_MASTER_BASE_URL`、Reverb は `NEXUS_REVERB_HOST` / `_PORT` / `_SCHEME` / `_APP_KEY`（`[nexus]` は `api_base_url` `master_base_url` `reverb_host` `reverb_port` `reverb_scheme` `reverb_app_key`）。`X-Platform` の値は `NEXUS_PLATFORM` → `[nexus]` の `platform` → OS の既定（iOS → Apple、Android → Google、それ以外 → Apple。許可値は `Apple` / `Google`）。Reverb のアプリキーの既定値は `nexus-local-key`（ローカル開発用。製品・他環境では `NEXUS_REVERB_APP_KEY` か `[nexus]` で上書き）。URL を直書きしない（[api.md](.claude/api.md)）
 
 ## コマンド（初回は `make setup-tools`。Godot は PATH 上の `godot`、別の場所なら `GODOT_BIN=/path/to/godot make ...`）
 

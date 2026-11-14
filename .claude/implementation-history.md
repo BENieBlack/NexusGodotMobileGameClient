@@ -49,3 +49,12 @@
 
 実サーバー（`http://localhost:8090`）に対し、e2e ドライバーでタイトル → 認証 → login → 規約（未同意なしでスキップ）→ ログインボーナス → ホームの通しが最後まで動くことを確認した。
 
+
+## home-player-info 第 1 段: 基盤（2026-11）
+
+設計: `docs/design/home-player-info/client_design.md`（2・3-3・5・6・7 節）。ホーム画面・スタミナ/ダイヤの計算は第 2 段。
+
+- `X-Platform`: `ApiConfig.platform()`（環境変数 → `[nexus] platform` → OS の既定）を `ApiClient._build_headers()` の 1 か所で全 `request()` に付与。`download()` と Toast には付けない。`set_platform("")` で欠落を再現（e2e）
+- 時刻: login 応答の `Date`（`HttpDate`）からサーバー時刻とのオフセットを作り `PlayerState` に保持。`Clock` / `SystemClock`（`skew_seconds`）、`ServerDatetime`（`Y-m-d H:i:s` の読み取り。失敗は -1）
+- login 応答: `trx_diamond`（単数）を取り込み、旧 `trx_diamond_list` は読まない。`TRX_LIST_KEYS` は 5 種。`is_delete` は `PlayerState.is_row_deleted()`（真偽値・0/1）
+- master_data: `mst_player_level` / `mst_config` の読み取りモデルと Repository（同梱せず、`REQUIRED_TABLES` も変えない）

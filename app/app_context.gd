@@ -37,6 +37,11 @@ var _check_master_data_use_case: CheckMasterDataUseCase
 var _mst_unit_repository: MstUnitRepository
 var _mst_equipment_repository: MstEquipmentRepository
 var _mst_gacha_repository: MstGachaRepository
+var _mst_player_level_repository: MstPlayerLevelRepository
+var _mst_config_repository: MstConfigRepository
+
+# --- core ---
+var _clock: SystemClock
 
 # --- auth ---
 var _auth_token_repository: LocalAuthTokenRepository
@@ -142,6 +147,12 @@ func debug_auth_token_repository() -> LocalAuthTokenRepository:
 	return _auth_token_repository
 
 
+## 端末の時計（SystemClock）。e2e の --e2e-clock-skew が skew_seconds を設定して、端末時計のずれを作る。
+## 製品の画面は使わない（時刻は UseCase が Clock の契約で受け取る）。
+func debug_clock() -> SystemClock:
+	return _clock
+
+
 # --- mst の Repository（master_data。読み取りのみ。各コンテキストの UseCase が使う） ---
 
 
@@ -155,6 +166,16 @@ func mst_equipment_repository() -> MstEquipmentRepository:
 
 func mst_gacha_repository() -> MstGachaRepository:
 	return _mst_gacha_repository
+
+
+## スタミナの最大値（レベル → max_stamina）。配信に無いときは get_by_level が null を返す。
+func mst_player_level_repository() -> MstPlayerLevelRepository:
+	return _mst_player_level_repository
+
+
+## 設定値（stamina_recovery_interval_seconds など）。配信に無いときは get_by_id が null を返す。
+func mst_config_repository() -> MstConfigRepository:
+	return _mst_config_repository
 
 
 # --- 組み立て ---
@@ -174,6 +195,8 @@ func _build() -> void:
 	if not _master_storage.initialize():
 		push_warning("マスターデータの DB を開けませんでした")
 
+	_clock = SystemClock.new()
+
 	# --- 2. ApiClient ---
 	_api_client = ApiClient.new()
 	add_child(_api_client)
@@ -186,6 +209,8 @@ func _build() -> void:
 	_mst_unit_repository = LocalMstUnitRepository.new(_master_database)
 	_mst_equipment_repository = LocalMstEquipmentRepository.new(_master_database)
 	_mst_gacha_repository = LocalMstGachaRepository.new(_master_database)
+	_mst_player_level_repository = LocalMstPlayerLevelRepository.new(_master_database)
+	_mst_config_repository = LocalMstConfigRepository.new(_master_database)
 	# auth
 	var auth_repository := AuthApiRepository.new(_api_client, _auth_token_repository)
 	_authenticate_use_case = AuthenticateUseCase.new(auth_repository, _auth_token_repository)
@@ -198,7 +223,9 @@ func _build() -> void:
 	# login
 	_login_bonus_repository = LocalLoginBonusRepository.new()
 	_login_use_case = LoginUseCase.new(
-		LoginApiRepository.new(_api_client), _login_bonus_repository, _apply_login_data_use_case
+		LoginApiRepository.new(_api_client, _clock),
+		_login_bonus_repository,
+		_apply_login_data_use_case
 	)
 	_get_login_bonuses_use_case = GetLoginBonusesUseCase.new(_login_bonus_repository)
 	# agreement

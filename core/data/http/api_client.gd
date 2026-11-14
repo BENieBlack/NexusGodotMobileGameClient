@@ -56,6 +56,10 @@ const VERSION_PATH_PREFIX := "/auth/version"
 
 const REFRESH_PATH := "/auth/refresh_token"
 
+## X-Platform の欠落・不正を表す error_code（サーバー api.md 10 節。HTTP 299。仮置きのコード）。
+## 分類（BUSINESS）はこの値に依存させず、開発者向けの push_error を出す判定にだけ使う
+const ERROR_CODE_PLATFORM_REJECTED := 99003
+
 ## refresh の失敗のうち「refresh を試せなかっただけ」の種別。セッションは破棄せず、この失敗を
 ## そのまま呼び出し元へ返す（電波が切れただけでログアウトさせない。client_design.md 3-5）
 const NOT_TRIED_KINDS: Array[AppError.Kind] = [
@@ -80,13 +84,28 @@ var _last_refresh_failure: ApiResult = null
 
 var _auth_provider: ApiAuthProvider = null
 var _master_hash_provider: MasterHashProvider = null
+## 全リクエストに付ける X-Platform の値。空文字なら付けない（e2e が欠落を再現するため。set_platform("")）
+var _platform: String = ""
 
 
 ## token と master_hash の供給元を渡す。AppContext が組み立て時に 1 回呼ぶ。
 ## 未設定（null）でも動く（トークンなし・ハッシュなしとして扱う）。
-func configure(auth_provider: ApiAuthProvider, master_hash_provider: MasterHashProvider) -> void:
+## platform は X-Platform の値。1 起動の間で変わらないので組み立て時に 1 回だけ受け取る
+## （既定は ApiConfig.platform()。テストは値を差し替えられる）。
+func configure(
+	auth_provider: ApiAuthProvider,
+	master_hash_provider: MasterHashProvider,
+	platform: String = ApiConfig.platform()
+) -> void:
 	_auth_provider = auth_provider
 	_master_hash_provider = master_hash_provider
+	_platform = platform
+
+
+## X-Platform の値を差し替える。空文字にするとヘッダーを付けなくなる（デバッグ専用:
+## e2e の --e2e-omit-platform がサーバーの 99003 を再現するために使う。製品は呼ばない）。
+func set_platform(platform: String) -> void:
+	_platform = platform
 
 
 ## API を 1 回呼ぶ（401 なら refresh して 1 回だけ再送する）。
@@ -164,6 +183,19 @@ static func has_master_update_required(headers: PackedStringArray) -> bool:
 	return false
 
 
+## ヘッダー配列から名前に一致する値を返す（無ければ空文字）。名前は大文字小文字を区別しない
+## （has_master_update_required と同じ走査）。サーバー時刻の Date の取り出しに使う。
+static func find_header(headers: PackedStringArray, header_name: String) -> String:
+	var wanted := header_name.to_lower()
+	for header in headers:
+		var separator_index := header.find(":")
+		if separator_index < 0:
+			continue
+		if header.substr(0, separator_index).strip_edges().to_lower() == wanted:
+			return header.substr(separator_index + 1).strip_edges()
+	return ""
+
+
 ## HTTP を実際に送る唯一の場所。テストはここを差し替える（継承して上書き）。
 ## 戻り値の辞書: {"result": HTTPRequest.Result, "status": HTTP ステータス,
 ##   "headers": PackedStringArray, "body": PackedByteArray}。
@@ -215,6 +247,11 @@ func _send(method: String, endpoint: String, body: Dictionary, options: Dictiona
 	)
 	var result := _classify(response, use_auth, bool(options.get("allow_empty_body", false)))
 
+	# X-Platform の欠落・不正（299 の 99003）は利用者には直せない実装の誤り。画面は汎用の
+	# BUSINESS 表示のままにし、開発者が気づけるようログに 1 回だけ出す（値は Apple / Google のみで秘密ではない）
+	if result.kind == AppError.Kind.BUSINESS and result.error_code == ERROR_CODE_PLATFORM_REJECTED:
+		push_error("X-Platform がサーバーに拒否されました（設定: %s）" % _platform)
+
 	# マスターの更新要求は、サーバーが HTTP 200 の応答にだけ付ける（299・4xx・5xx には付かない）。
 	# version 自体の応答は本文の needs_update で判定できるので無視する。待たずに結果を返す
 	if result.ok and result.http_status == 200 and not endpoint.begins_with(VERSION_PATH_PREFIX):
@@ -225,6 +262,8 @@ func _send(method: String, endpoint: String, body: Dictionary, options: Dictiona
 
 ## リクエストヘッダーを組み立てる。
 ## Authorization は認証付きでトークンが在るときだけ。X-Master-Hash は全リクエストに（空なら付けない）。
+## X-Platform は request() を通る全リクエスト（refresh・GET /auth/version を含む）にここ 1 か所で付ける
+## （空なら付けない）。署名の対象ではない。download()（配信ホスト・規約本文）は _send を通らないので付かない。
 ## ログにトークンや本文を出さない（client_design.md 8 節 11）。
 func _build_headers(
 	use_auth: bool, idempotency_key: String, extra_headers: Variant
@@ -238,6 +277,8 @@ func _build_headers(
 		var master_hash := _master_hash_provider.master_hash()
 		if master_hash != "":
 			headers.append("X-Master-Hash: " + master_hash)
+	if _platform != "":
+		headers.append("X-Platform: " + _platform)
 	if idempotency_key != "":
 		headers.append("X-Unique-Request-Identifier: " + idempotency_key)
 	for header in extra_headers:

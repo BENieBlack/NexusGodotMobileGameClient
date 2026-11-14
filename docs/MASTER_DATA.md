@@ -170,6 +170,14 @@ if gacha != null:
 var units := AppContext.mst_unit_repository().get_all()
 var unit := AppContext.mst_unit_repository().get_by_id("unit_001")
 
+# プレイヤーレベル・設定値（mst_player_level / mst_config。ホームのスタミナ表示用）
+# 同梱 DB には入れず、配信があるときだけ更新 DB から読む（REQUIRED_TABLES にも入れない）。
+# 配信が無い・テーブルが無いときは null が返る（呼び出し側が「分からない」として扱う）
+var level := AppContext.mst_player_level_repository().get_by_level(1)   # level.max_stamina
+var config := AppContext.mst_config_repository().get_by_id("stamina_recovery_interval_seconds")
+if config != null:
+    print(config.value_as_int())   # value_type が int で整数に読めるときだけ。他は -1
+
 # 装備
 var equipments := AppContext.mst_equipment_repository().get_all()
 var equipment := AppContext.mst_equipment_repository().get_by_id("equip_001")

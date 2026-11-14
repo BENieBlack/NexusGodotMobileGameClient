@@ -42,6 +42,12 @@ func handle(idempotency_key: String = "") -> Result:
 		return Result.failure(fetched.error)
 
 	# --- 3・4. 反映（成功したときだけ。失敗時に古い状態を中途半端に書き換えない） ---
-	_apply_login_data.handle(fetched.sys_player, fetched.trx_lists)
+	_apply_login_data.handle(
+		fetched.sys_player,
+		fetched.trx_lists,
+		fetched.trx_diamond,
+		fetched.server_time_offset_seconds,
+		fetched.has_server_time
+	)
 	_login_bonus_repository.replace(fetched.login_bonuses)
 	return Result.success()

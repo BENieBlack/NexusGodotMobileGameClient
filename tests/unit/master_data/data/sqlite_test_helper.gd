@@ -43,3 +43,39 @@ static func create_master_db(path: String) -> bool:
 			return false
 	database.close_db()
 	return true
+
+
+## path に SQLite ファイルを作り、mst_player_level と mst_config を入れる（配信から取り込まれる想定の
+## 任意テーブル。同梱 DB にも REQUIRED_TABLES にも無いので、create_master_db とは別ファイルにする）。
+static func create_home_master_db(path: String) -> bool:
+	if not ClassDB.class_exists("SQLite"):
+		return false
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var database: Object = ClassDB.instantiate("SQLite")
+	database.path = path
+	if not database.open_db():
+		return false
+	var statements := [
+		(
+			"CREATE TABLE mst_player_level (deploy_key INTEGER, level INTEGER PRIMARY KEY, "
+			+ "required_exp INTEGER, max_stamina INTEGER)"
+		),
+		"INSERT INTO mst_player_level VALUES (1, 1, 0, 50)",
+		"INSERT INTO mst_player_level VALUES (1, 2, 100, 52)",
+		"INSERT INTO mst_player_level VALUES (1, 3, NULL, NULL)",
+		(
+			"CREATE TABLE mst_config (deploy_key INTEGER, id TEXT PRIMARY KEY, "
+			+ "value TEXT, value_type TEXT)"
+		),
+		"INSERT INTO mst_config VALUES (1, 'stamina_recovery_interval_seconds', '300', 'int')",
+		"INSERT INTO mst_config VALUES (1, 'float_value', '1.5', 'float')",
+		"INSERT INTO mst_config VALUES (1, 'broken_int', 'abc', 'int')",
+		"INSERT INTO mst_config VALUES (1, 'null_value', NULL, NULL)",
+		"INSERT INTO mst_config VALUES (1, 'zero', '0', 'int')",
+	]
+	for statement: String in statements:
+		if not database.query(statement):
+			database.close_db()
+			return false
+	database.close_db()
+	return true
