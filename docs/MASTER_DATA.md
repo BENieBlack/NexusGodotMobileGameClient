@@ -106,7 +106,7 @@ user://
 ## 📁 ディレクトリ構造
 
 ```
-NexusGodotMobileGameClient/
+NexusMobileGameClient-Godot/
 ├── data/
 │   └── master.db                    # 同梱マスターデータベース（SQLite。初回・更新 DB が欠けたとき用）
 └── master_data/

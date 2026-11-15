@@ -1,4 +1,4 @@
-# NexusGodotMobileGameClient
+# NexusMobileGameClient-Godot
 
 モバイルゲームのクライアント（Godot 4 / GDScript）。バックエンド API は `NexusLaravelMobileGameServer` が提供する。
 
