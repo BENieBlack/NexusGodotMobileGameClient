@@ -21,7 +21,7 @@
 クリーンアーキテクチャ（presentation / domain / data の 3 層）+ 軽量 DDD。詳細は [architecture.md](./architecture.md)。旧構成（`scenes/` と `scripts/`）は削除済みで、すべてこの構成にある。
 
 ```
-NexusGodotMobileGameClient/
+NexusMobileGameClient-Godot/
 ├── app/                       # 合成ルート
 │   ├── app_context.gd         #   依存の組み立て（オートロード）
 │   └── scene_router.gd        #   画面遷移（オートロード）
