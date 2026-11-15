@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """背景動画 assets/video/bg_loop.ogv を、外部素材なしで一から生成する。
 
-夜空のグラデーション・月・ゆっくり流れる雲・またたく星・時々走る流れ星を numpy で描き、
+夜空のグラデーション・月・ゆっくりたなびく霧状の雲・またたく星・時々走る流れ星を numpy で描き、
 同梱の小さな C エンコーダ（tools/bg_video/yuv2theora.c、libtheora を使う）で Ogg Theora にする。
 Godot 4 が再生できる動画は Ogg Theora だけで、ffmpeg に libtheora が無い環境でも作れるようにするため。
 
 シームレスなループの作り方: 動きはすべて「ループの長さ（SECONDS 秒）の周期」にする。
-  - 雲: ちょうど 1 周ぶん（レイヤーの幅だけ）左へ動かし、はみ出しは反対側から戻す
+  - 雲: 横に周期的なノイズを、ちょうど 1 周ぶん（レイヤーの幅だけ）左へ動かす
   - 星のまたたき: 周期が SECONDS の約数になる正弦波
   - 流れ星: すべて SECONDS の内側で始まり、終わる（境目をまたがない）
   最後のコマの次が最初のコマになるので、継ぎ目で値が飛ばない。
@@ -76,43 +76,74 @@ def make_base(rng):
     return img
 
 
-def cloud_alpha(width, y_top, band_h, specs):
-    """雲のレイヤー（幅 width、高さ band_h の帯）の被覆率を返す。specs は (中心 x, ベースライン y, 大きさ)。"""
-    yy, xx = np.mgrid[0:band_h, 0:width].astype(np.float32)
-    alpha = np.zeros((band_h, width), np.float32)
-    for cx, base, s in specs:
-        by = base - y_top
-        # 底が平らな雲: 底に接する大小の円と、その間を埋める長方形の和集合
-        circles = [(-0.62, 0.34), (-0.2, 0.52), (0.28, 0.44), (0.66, 0.30)]
-        for ox, rr in circles:
-            alpha = np.maximum(alpha, disc(xx, yy, cx + ox * s, by - rr * s, rr * s))
-        rect_x = np.clip(0.5 - (np.abs(xx - cx - 0.02 * s) - 0.66 * s) / 1.5, 0, 1)
-        rect_y = np.clip(0.5 - (np.abs(yy - (by - 0.15 * s)) - 0.15 * s) / 1.5, 0, 1)
-        alpha = np.maximum(alpha, rect_x * rect_y)
-        # 横に折り返す雲（レイヤー幅をまたぐもの）も自然につながるよう、左右の端で複製を描く
-    return alpha
+def periodic_noise(rng, width, height, cells_x, cells_y):
+    """x 方向に周期 width でつながる値ノイズ（0..1）。セル数が少ないほどゆるやかな起伏になる。
+
+    乱数の格子を滑らかに（smoothstep で）補間して作る。x は格子の端を反対側に巻き付けるので、
+    width ぶん横にずらすとちょうど元に戻る（= シームレスなループの土台）。
+    """
+    grid = rng.random((cells_y + 1, cells_x)).astype(np.float32)
+
+    def axis_weights(n, cells, wrap):
+        pos = np.arange(n, dtype=np.float32) / n * cells
+        i0 = np.floor(pos).astype(int)
+        f = pos - i0
+        f = f * f * (3 - 2 * f)  # smoothstep
+        i1 = i0 + 1
+        if wrap:
+            i0, i1 = i0 % cells, i1 % cells
+        return i0, i1, f
+
+    x0, x1, fx = axis_weights(width, cells_x, True)
+    y0, y1, fy = axis_weights(height, cells_y, False)
+    top = grid[y0][:, x0] * (1 - fx) + grid[y0][:, x1] * fx
+    bot = grid[y1][:, x0] * (1 - fx) + grid[y1][:, x1] * fx
+    return top * (1 - fy[:, None]) + bot * fy[:, None]
 
 
-class CloudLayer:
-    """1 ループでちょうど 1 周する雲のレイヤー。canvas の幅ぶん動くと元の位置に戻る。"""
+MOON = (0.78 * WIDTH, 0.115 * HEIGHT)  # 月の中心（make_base と同じ位置）
 
-    def __init__(self, canvas_w, y_top, band_h, specs, color, opacity):
-        self.canvas_w = canvas_w
-        self.y_top = y_top
-        self.band_h = band_h
+
+class FogLayer:
+    """横に長くたなびく霧状の薄い雲のレイヤー。1 ループでちょうど canvas_w だけ左へ動いて元に戻る。
+
+    作り方: x 方向に周期的なノイズを数オクターブ重ね、縦はセル数を少なくして横長の筋にする。
+    それを「しきい値のなだらかな段」で雲と空に分け（縁が硬くならない）、縦の帯の中心に寄せる
+    ガウス型の重みを掛けて、上下がふんわり消える帯にする。月に近い部分だけ月明かりで明るくする。
+    """
+
+    def __init__(self, seed, canvas_w, y_top, band_h, color, opacity, cells, thr=(0.4, 0.75)):
+        rng = np.random.default_rng(seed)
+        self.canvas_w, self.y_top, self.band_h = canvas_w, y_top, band_h
+        # 数オクターブを重ねる（粗い起伏が主で、細かい起伏で霧のむらを足す）
+        field = np.zeros((band_h, canvas_w), np.float32)
+        total = 0.0
+        for i, cx in enumerate(cells):
+            amp = 0.55 ** i
+            # セルの縦横比が約 1:4（横長）になるよう、縦のセル数を決める
+            cy = max(2, round(4 * band_h * cx / canvas_w))
+            field += amp * periodic_noise(rng, canvas_w, band_h, cx, cy)
+            total += amp
+        field /= total
+        # しきい値のなだらかな段（thr[0] 以下は空、thr[1] 以上は濃い雲）
+        t = np.clip((field - thr[0]) / (thr[1] - thr[0]), 0, 1)
+        t = t * t * (3 - 2 * t)
+        # 帯の上下をふんわり消す重み
+        yy = (np.arange(band_h, dtype=np.float32) - band_h / 2) / (band_h / 2)
+        env = np.exp(-(yy * 2.3) ** 2)[:, None]
+        self.alpha = (t * env * opacity).astype(np.float32)
         self.color = np.array(color, np.float32)
-        # 幅をまたぐ雲を作るため、specs を左右にずらしたものも含めて描く
-        wide = [(cx + k * canvas_w, b, s) for k in (-1, 0, 1) for cx, b, s in specs]
-        full = cloud_alpha(canvas_w * 3, y_top, band_h, [(cx + canvas_w, b, s) for cx, b, s in wide])
-        # 3 枚並べた中の中央 1 枚ぶんを取り出す（両隣の雲のはみ出しが端に入る）
-        self.alpha = full[:, canvas_w : 2 * canvas_w] * opacity
+        # 月明かり: 月に近いほど雲の色を明るい色へ寄せる（ループ中は月が動かないので 1 回だけ計算）
+        yy2, xx2 = np.mgrid[y_top : y_top + band_h, 0:WIDTH].astype(np.float32)
+        glow = np.exp(-(np.hypot(xx2 - MOON[0], yy2 - MOON[1]) / 380.0) ** 2) * 0.75
+        self.rim = glow[..., None] * (np.array([205, 205, 235], np.float32) - self.color)
 
     def draw(self, img, t_frac):
         """t_frac（0..1）に応じて左へ動かし、画面の幅（WIDTH）だけ切り出して合成する。"""
         shift = int(round(t_frac * self.canvas_w))
         a = np.roll(self.alpha, -shift, axis=1)[:, :WIDTH]
         region = img[self.y_top : self.y_top + self.band_h]
-        region += (self.color - region) * a[..., None]
+        region += (self.color + self.rim - region) * a[..., None]
 
 
 def draw_dot(img, x, y, radius, intensity, cross=0.0):
@@ -174,9 +205,13 @@ def main() -> int:
     rng = np.random.default_rng(20240607)  # 固定の種: 何度作っても同じ動画になる
     base = make_base(rng)
 
-    # 雲: 奥（小さく淡い・遅い）と手前（大きく明るい・速い）。1 ループで canvas の幅だけ動く
-    far = CloudLayer(1080, 0, 850, [(280, 180, 150), (860, 330, 130), (520, 640, 120), (110, 780, 140)], (74, 72, 122), 0.55)
-    near = CloudLayer(1620, 100, 800, [(780, 480, 200), (200, 760, 190), (1250, 600, 160), (1480, 380, 150)], (150, 155, 188), 0.72)
+    # 雲（霧状のたなびく帯）: 奥ほど暗く遅く、手前ほど明るく速い。1 ループで canvas の幅だけ動く
+    # （幅 1080 / 1620 / 2160 → 54 / 81 / 108 px/秒。いずれも整数ピクセルでぴったり 1 周する）
+    clouds = [
+        FogLayer(11, 1080, 60, 760, (58, 62, 112), 0.85, (3, 6, 12)),
+        FogLayer(23, 1620, 420, 800, (96, 108, 150), 0.8, (4, 8, 16)),
+        FogLayer(37, 2160, 200, 620, (128, 140, 178), 0.7, (5, 10, 20), thr=(0.45, 0.8)),
+    ]
 
     # 星: 位置・大きさ・またたきの周期（SECONDS の約数になるよう整数回）と位相を固定の乱数で決める
     stars = []
@@ -208,8 +243,8 @@ def main() -> int:
         for t0, dur, sx, sy, ang in shooters:
             if t0 <= t < t0 + dur:
                 draw_shooting_star(img, sx, sy, ang, 260, 760, (t - t0) / dur)
-        far.draw(img, frac)
-        near.draw(img, frac)
+        for layer in clouds:
+            layer.draw(img, frac)
         enc.stdin.write(to_yuv420(img))
         if f % 50 == 0:
             print(f"frame {f}/{args.frames}", file=sys.stderr)
