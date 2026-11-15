@@ -3,7 +3,7 @@
 新しい画面・コンテキスト・API 呼び出しを追加するとき、コンテキストをまたぐ依存を書くとき、既存ファイルを新構成へ移すときに読む。
 GDScript の書き方は [coding-standards.md](./coding-standards.md)、サーバー API の通信仕様は [api.md](./api.md)。
 
-クライアントは、サーバー（`NexusLaravelMobileGameServer`）と同じく**クリーンアーキテクチャと DDD（軽量版）**で作る。層は、モバイルの一般的な Clean Architecture に合わせた **presentation / domain / data の 3 層**。サーバーの規約（[サーバーの CLAUDE.md](../../NexusLaravelMobileGameServer/CLAUDE.md)、同 `.claude/architecture.md`）と考え方を揃える。
+クライアントは、サーバー（`NexusMobileGameServer-Laravel`）と同じく**クリーンアーキテクチャと DDD（軽量版）**で作る。層は、モバイルの一般的な Clean Architecture に合わせた **presentation / domain / data の 3 層**。サーバーの規約（[サーバーの CLAUDE.md](../../NexusMobileGameServer-Laravel/CLAUDE.md)、同 `.claude/architecture.md`）と考え方を揃える。
 
 - UseCase は 1 操作 1 つ。結果の型は UseCase ごとに持つ（共用しない）
 - 他コンテキストは、相手の公開する契約（domain の公開 UseCase）か共有の EventBus だけを使う。相手の内部を直接参照しない

@@ -2,7 +2,7 @@
 
 - 要件: `Nexus/docs/requirements/free-diamond-item.md`（F9 (5)・F10・F11・F3・Q10・Q14・Q15。確認事項 Q1〜Q24 は確定済み。**仕様の正本は要件**。ここには複製せず節番号で指す）
 - 全体設計: `Nexus/docs/design/free-diamond-item/overview.md`（クライアントの変更 K1〜K4（6 節）、未解決 U-1〜U-5）
-- サーバー設計（正。マージ済み）: `NexusLaravelMobileGameServer/docs/design/free-diamond-item/{db,api,sequence}.md`（login の `trx_diamond` は api.md 3.1、`login_bonus_list` は 3.3、`updated_resources` の約束は 2 節、購入応答は 5.3、動画用シードは 8 節・db.md 6.1）
+- サーバー設計（正。マージ済み）: `NexusMobileGameServer-Laravel/docs/design/free-diamond-item/{db,api,sequence}.md`（login の `trx_diamond` は api.md 3.1、`login_bonus_list` は 3.3、`updated_resources` の約束は 2 節、購入応答は 5.3、動画用シードは 8 節・db.md 6.1）
 - 要件・サーバー設計の追記（design-change。人の決定 Q-C7・Q-C8）: 表示名の配信（`mst_item__l10n`）と、クライアントの `ja` 固定の言語指定（5-3 のサーバーへの申し送り）
 - 前提: [home-player-info のクライアント設計](../home-player-info/client_design.md)（ダイヤの合計は 4-2。`DiamondTotal`・login 応答の取り込みは 2-2・6 節。**ここには複製せず、差分だけ書く**）、[title-to-home](../title-to-home/client_design.md)
 - 決定: `Nexus/docs/adr/0002-client-clean-architecture-ddd-lite.md`（3 層・master_data 共有モジュール）
@@ -227,7 +227,7 @@ login の `login_bonus_list` の無償ダイヤの要素が `type: diamond` → 
 
 ### 8-1. 前提
 
-- サーバー: `NexusLaravelMobileGameServer` で `make up`。**free-diamond-item の S3（実装）が完了していること**（`trx_diamond.free_amount` の廃止、`login_bonus_list` の `item` / `free_diamond`）。`make migrate-fresh && make seed`（create マイグレーションの書き換えなので作り直し。db.md）。
+- サーバー: `NexusMobileGameServer-Laravel` で `make up`。**free-diamond-item の S3（実装）が完了していること**（`trx_diamond.free_amount` の廃止、`login_bonus_list` の `item` / `free_diamond`）。`make migrate-fresh && make seed`（create マイグレーションの書き換えなので作り直し。db.md）。
 - **マスター配信（名前を引くための前提。5-3）**: `mst_item__l10n` に `free_diamond`（`ja`・「無償ダイヤ」）の行がある（サーバーの別タスク・Q-C7）ことを確認し、`/master-import/export` で配信を作り直して、version API の `master.tables` に `mst_item` が載ることを確かめる。**クライアントはタイトルでマスターをダウンロードして切り替えた後にホームまで進む**（ケース 1 の動画はそれを映す。ダウンロードの進捗表示が出る）。
 - クライアント: 縦長 1080x1920。録画は `godot --path <client> --write-movie <out.avi> --fixed-fps 30 --resolution 1080x1920 -- --e2e-case=<名前> --e2e-dwell=2 --e2e-home-hold=3`（`docs/workflow/recording.md`）。
 - 値の作り方: 開発 DB のプレイヤーのシャード（`trx1`〜）の `trx_item`（`mst_item_id = 'free_diamond'`）・`trx_diamond` を直接更新する（home-player-info 8-1 と同じ。S5 で実際に通る SQL を確認する）。

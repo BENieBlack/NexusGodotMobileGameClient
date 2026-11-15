@@ -7,7 +7,7 @@
 ## プロジェクト概要
 
 このプロジェクトは、**モバイルゲームのクライアントアプリ**を提供するGodot 4アプリケーションです。
-バックエンドAPIは `NexusLaravelMobileGameServer` が提供します。
+バックエンドAPIは `NexusMobileGameServer-Laravel` が提供します。
 
 ### 主な特徴
 
@@ -122,7 +122,7 @@ Godot 4 でこのディレクトリを開いてください。
 
 ### 2. サーバを起動
 
-`NexusLaravelMobileGameServer` を起動してください（サーバー側で `make up`。API は `http://localhost:8090/api`、マスターデータの配信は `http://localhost:8091`）。
+`NexusMobileGameServer-Laravel` を起動してください（サーバー側で `make up`。API は `http://localhost:8090/api`、マスターデータの配信は `http://localhost:8091`）。
 
 ### 3. エンドポイント設定
 

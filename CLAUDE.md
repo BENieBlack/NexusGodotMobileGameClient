@@ -1,6 +1,6 @@
 # NexusMobileGameClient-Godot
 
-モバイルゲームのクライアント（Godot 4 / GDScript）。バックエンド API は `NexusLaravelMobileGameServer` が提供する。
+モバイルゲームのクライアント（Godot 4 / GDScript）。バックエンド API は `NexusMobileGameServer-Laravel` が提供する。
 
 このファイルは Claude Code と opencode の両方が毎回読む。ここには毎回守ることだけを書き、詳細は下の「参照資料」に置く。
 
