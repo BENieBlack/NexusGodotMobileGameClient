@@ -4,7 +4,7 @@
 ##       1 か所に集める。
 ## 注意（仮置き）: サーバーの `mst_item.id`（coin / free_diamond）・スタミナの type（normal）・
 ##       `MstConfigKey`（stamina_recovery_interval_seconds）と一致させる二重管理。サーバー側の定義を
-##       変えたらここも直す（サーバー: NexusLaravelMobileGameServer の mst_item シーダーと MstConfigKey）。
+##       変えたらここも直す（サーバー: NexusMobileGameServer-Laravel の mst_item シーダーと MstConfigKey）。
 class_name PlayerResourceIds
 extends RefCounted
 

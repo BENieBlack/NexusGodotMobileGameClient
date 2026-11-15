@@ -2,7 +2,7 @@
 
 - 要件: `Nexus/docs/requirements/home-player-info.md`
 - 全体設計: `Nexus/docs/design/home-player-info/overview.md`（決定 Q1〜Q5・Q10〜Q13・D1〜D3、仮置き P1〜P6・U3・U5・U6、未解決 U2・U7）
-- サーバー設計（正）: `NexusLaravelMobileGameServer/docs/design/home-player-info/{db,api,sequence}.md`（login の応答項目は api.md 2 節、X-Platform は 10 節、MstConfig の配信は 6 節、サインアップ時の初期付与は 4 節）
+- サーバー設計（正）: `NexusMobileGameServer-Laravel/docs/design/home-player-info/{db,api,sequence}.md`（login の応答項目は api.md 2 節、X-Platform は 10 節、MstConfig の配信は 6 節、サインアップ時の初期付与は 4 節）
 - 前提: [title-to-home のクライアント設計](../title-to-home/client_design.md)（`ApiClient`・login・`master_data` の仕組み。ここには複製せず、差分だけ書く）
 - 決定: `Nexus/docs/adr/0002-client-clean-architecture-ddd-lite.md`（3 層・master_data 共有モジュール）
 
@@ -297,7 +297,7 @@ login の応答（api.md 2 節・4 節）を `LoginResponse` で型付きにし�
 
 ### 8-1. 前提
 
-- サーバー: `NexusLaravelMobileGameServer` で `make up`（API :8090、配信 :8091）。**S3 完了**（`mst_config` の新設、回復間隔の MstConfig 化、`X-Platform` 必須、サインアップ時の初期付与、`is_delete` の真偽値化、login の `trx_diamond`（単数））。`make migrate-fresh && make seed`（`MstConfigSeeder`・`MstPlayerLevelSeeder`・`mst_item` の `free_diamond` を含む）。
+- サーバー: `NexusMobileGameServer-Laravel` で `make up`（API :8090、配信 :8091）。**S3 完了**（`mst_config` の新設、回復間隔の MstConfig 化、`X-Platform` 必須、サインアップ時の初期付与、`is_delete` の真偽値化、login の `trx_diamond`（単数））。`make migrate-fresh && make seed`（`MstConfigSeeder`・`MstPlayerLevelSeeder`・`mst_item` の `free_diamond` を含む）。
 - **マスターの配信（S5 の前の運用作業）**: 運営ツール（:8091）の `POST /master-import/export` を開発環境で実行し、`sys_deploy_master_table` に `mst_player_level`・`mst_config` の行があり、`GET /auth/version` の `master.tables` に両方があることを確認する（api.md 6.4。実行は主担当の運用作業）。**動画用シード（`RecordingDeploySeeder`）は配信ファイルを作らない**（別の Server タスク。overview 8 節 Q12 の影響 4）ので、それが済むまでの動画は開発環境のエクスポート済みサーバーで撮る。
 - 値の作り方（開発 DB。S5 で実際に通る SQL を確認する。仮置き）:
   - **短い回復間隔**: `mst_config` の `stamina_recovery_interval_seconds` を 300 → 20 に更新して再エクスポートし、クライアントを再起動（version の `needs_update` で `mst_config` を取得）。**確認後に 300 へ戻して再エクスポート**。サーバーの login の回復計算も同じ値を使うので、サーバーとクライアントで食い違わない。

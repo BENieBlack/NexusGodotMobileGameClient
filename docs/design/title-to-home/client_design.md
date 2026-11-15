@@ -3,7 +3,7 @@
 - 要件: `Nexus/docs/requirements/title-to-home.md`
 - 全体設計: `Nexus/docs/design/title-to-home/overview.md`（食い違い表 D2〜D9）
 - 決定: `Nexus/docs/adr/0001-master-distribution-host-in-client-config.md`（配信ホストはクライアントの設定値）
-- サーバー設計（正）: `NexusLaravelMobileGameServer/docs/design/title-to-home/{db,api,sequence}.md`
+- サーバー設計（正）: `NexusMobileGameServer-Laravel/docs/design/title-to-home/{db,api,sequence}.md`
 
 > 改訂履歴: クライアントのクリーンアーキテクチャ（presentation / domain / data の 3 層）+ 軽量 DDD 化（`.claude/architecture.md`）に合わせ、2 節（構成・変更ファイル）と各節のパス・クラス名を新構成に直した。**構造の変更**: マスターデータはコンテキストでなく共有モジュール `master_data/`（`contexts/` と同階層）に置く。 `ApiClient` のオートロード一本化 → `AppContext` が 1 つ生成（オートロード廃止）、`UserDataManager` を `auth` / `player` / `login` に分解、`ApiResult.kind` → 上位では `AppError.kind`。**API 呼び出し・エラー分類・冪等キー・refresh・確認手順の挙動は変えていない**。
 >
@@ -330,7 +330,7 @@ overview の「保存済みトークンの有無で最初に呼ぶ API を決め
 
 ### 7-1. 前提
 
-- サーバー: `NexusLaravelMobileGameServer` で `make up`（API :8090、配信 :8091）、`make migrate-fresh && make seed`（`SysDeploySeeder` `MstLoginBonusSeeder` を含む。ログインボーナスは 7 日ループの通常ボーナス）。
+- サーバー: `NexusMobileGameServer-Laravel` で `make up`（API :8090、配信 :8091）、`make migrate-fresh && make seed`（`SysDeploySeeder` `MstLoginBonusSeeder` を含む。ログインボーナスは 7 日ループの通常ボーナス）。
 - 規約（`sys_agreement`）と `sys_maintenance` は**シーダーが無い**ので、ケースごとに手で投入する（下の各ケース。SQL は S5 で実際に通る文を確認する。仮置き）。
 - クライアント: 縦長 1080x1920（`project.godot` の `window/size` に一致）。録画は Godot の Movie Maker: `godot --path <client> --write-movie <out.avi> --resolution 1080x1920 --fixed-fps 30 -- --e2e=<ケース名>`。
 - **自動操作**: 規約の同意ボタンとログインボーナスのタップは人の操作なので、録画では自動操作が要る。S5 で `debug/e2e_driver.gd`（debug 用。エクスポート除外）をオートロード（最後）に足した。`--e2e-case=<名前>`（または `--e2e=...`）が無いと何もしない。駆動する内容:
