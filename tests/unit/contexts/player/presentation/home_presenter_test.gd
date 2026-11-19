@@ -8,10 +8,10 @@ const LAST_AT := "2027-01-15 08:00:00"
 const NAME := "Margin/Root/PlayerPanel/VBox/NameLabel"
 const ID := "Margin/Root/PlayerPanel/VBox/Row/IdLabel"
 const LEVEL := "Margin/Root/PlayerPanel/VBox/Row/LevelLabel"
-const STAMINA := "Margin/Root/StaminaPanel/VBox/StaminaValueLabel"
+const STAMINA := "Margin/Root/StaminaPanel/VBox/ValueRow/StaminaValueLabel"
 const REMAIN := "Margin/Root/StaminaPanel/VBox/StaminaRemainLabel"
-const COIN := "Margin/Root/CurrencyRow/CoinPanel/VBox/CoinValueLabel"
-const DIAMOND := "Margin/Root/CurrencyRow/DiamondPanel/VBox/DiamondValueLabel"
+const COIN := "Margin/Root/CurrencyRow/CoinPanel/VBox/ValueRow/CoinValueLabel"
+const DIAMOND := "Margin/Root/CurrencyRow/DiamondPanel/VBox/ValueRow/DiamondValueLabel"
 
 var _clock: FakeMstRepositories.FixedClock
 var _levels: FakeMstRepositories.Level
@@ -264,3 +264,33 @@ func test_layout_fits_in_viewport() -> void:
 		assert_float(rects[paths[0]].end.x).is_equal_approx(size.x - 48.0, 0.5)
 		assert_float(rects[paths[4]].size.y).is_greater_equal(160.0)
 		viewport.queue_free()
+
+
+## 前提: ログイン済みのホーム。期待: スタミナ・コイン・ダイヤの値の横に ItemIcon が 1 つずつ在り、固定の ID の絵が入って
+## 大きさは 48（client_design.md 5-5。無償ダイヤは合計用の絵を作らず free_diamond）。値の文字は従来のまま。
+func test_value_icons_are_shown_with_fixed_ids() -> void:
+	var lists := _stamina(50)
+	lists["trx_wallet_list"] = [{"mst_item_id": "coin", "free_amount": 1000}]
+	_login({"my_id": "a", "level": 1}, lists)
+	var screen := await _show_home()
+	var expected := {
+		"Margin/Root/StaminaPanel/VBox/ValueRow/StaminaIcon": "items/stamina_50",
+		"Margin/Root/CurrencyRow/CoinPanel/VBox/ValueRow/CoinIcon": "items/coin",
+		"Margin/Root/CurrencyRow/DiamondPanel/VBox/ValueRow/DiamondIcon": "items/free_diamond",
+	}
+	for path: String in expected:
+		var icon := screen.get_node(path) as ItemIcon
+		assert_object(icon).is_not_null()
+		assert_str(icon.resolved_key).is_equal(expected[path])
+		assert_vector(icon.custom_minimum_size).is_equal(Vector2(48, 48))
+	assert_str(_text(screen, COIN)).is_equal("1,000")
+
+
+## 前提: 未ログインのホーム。期待: アイコンは出たまま（絵は値に依らない）で、値は「-」。
+func test_value_icons_shown_when_not_logged_in() -> void:
+	var screen := await _show_home()
+	var icon := (
+		screen.get_node("Margin/Root/CurrencyRow/CoinPanel/VBox/ValueRow/CoinIcon") as ItemIcon
+	)
+	assert_object(icon.texture).is_not_null()
+	assert_str(_text(screen, COIN)).is_equal("-")

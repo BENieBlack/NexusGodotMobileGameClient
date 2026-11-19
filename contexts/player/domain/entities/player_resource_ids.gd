@@ -12,6 +12,9 @@ extends RefCounted
 const COIN := "coin"
 ## 無償ダイヤの mst_item.id（trx_item_list の mst_item_id）
 const FREE_DIAMOND := "free_diamond"
+## ホームのスタミナの横のアイコンに使う mst_item.id（スタミナ回復薬。stamina_50。client_design.md 5-5）。
+## ホームは master_data を使わず固定の ID で絵を出すので、ここに持つ（サーバーの MstItemSeeder と一致させる二重管理）
+const STAMINA_ICON_ITEM_ID := "stamina_50"
 ## ホームで使うスタミナの種類（trx_stamina_list の type。raid / pvp / event は使わない。P1）
 const STAMINA_TYPE_NORMAL := "normal"
 ## スタミナの回復間隔（秒）を持つ mst_config の id

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<defs><linearGradient id="g_rose" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFA3BA"/><stop offset="1" stop-color="#FF6F91"/></linearGradient><linearGradient id="g_cream" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#FFF3CF"/></linearGradient></defs>
+<circle cx="64" cy="64" r="52" fill="url(#g_rose)" fill-opacity="0.95"/>
+<circle cx="64" cy="64" r="40" fill="#D9446E" fill-opacity="0.3"/>
+<path d="M32 64 L44 52 L56 64 L84 34 L96 46 L56 88 Z" fill="url(#g_cream)"/>
+</svg>

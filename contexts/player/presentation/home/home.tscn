@@ -1,8 +1,9 @@
-[gd_scene load_steps=6 format=3 uid="uid://c3x7y9k2n5h8p"]
+[gd_scene load_steps=7 format=3 uid="uid://c3x7y9k2n5h8p"]
 
 [ext_resource type="Script" path="res://contexts/player/presentation/home/home_presenter.gd" id="1_home"]
 [ext_resource type="Theme" path="res://assets/ui/casual_theme.tres" id="2_theme"]
 [ext_resource type="VideoStream" path="res://assets/video/bg_loop.ogv" id="4_video"]
+[ext_resource type="PackedScene" path="res://core/presentation/item_icon/item_icon.tscn" id="5_icon"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 bg_color = Color(0.1, 0.42, 0.25, 0.9)
@@ -113,7 +114,15 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 36
 text = "スタミナ"
 
-[node name="StaminaValueLabel" type="Label" parent="Margin/Root/StaminaPanel/VBox"]
+[node name="ValueRow" type="HBoxContainer" parent="Margin/Root/StaminaPanel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="StaminaIcon" parent="Margin/Root/StaminaPanel/VBox/ValueRow" instance=ExtResource("5_icon")]
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="StaminaValueLabel" type="Label" parent="Margin/Root/StaminaPanel/VBox/ValueRow"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 72
 text = "-"
@@ -143,7 +152,15 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 36
 text = "コイン"
 
-[node name="CoinValueLabel" type="Label" parent="Margin/Root/CurrencyRow/CoinPanel/VBox"]
+[node name="ValueRow" type="HBoxContainer" parent="Margin/Root/CurrencyRow/CoinPanel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="CoinIcon" parent="Margin/Root/CurrencyRow/CoinPanel/VBox/ValueRow" instance=ExtResource("5_icon")]
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="CoinValueLabel" type="Label" parent="Margin/Root/CurrencyRow/CoinPanel/VBox/ValueRow"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 56
 text = "-"
@@ -163,7 +180,15 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 36
 text = "ダイヤ"
 
-[node name="DiamondValueLabel" type="Label" parent="Margin/Root/CurrencyRow/DiamondPanel/VBox"]
+[node name="ValueRow" type="HBoxContainer" parent="Margin/Root/CurrencyRow/DiamondPanel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="DiamondIcon" parent="Margin/Root/CurrencyRow/DiamondPanel/VBox/ValueRow" instance=ExtResource("5_icon")]
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="DiamondValueLabel" type="Label" parent="Margin/Root/CurrencyRow/DiamondPanel/VBox/ValueRow"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 56
 text = "-"

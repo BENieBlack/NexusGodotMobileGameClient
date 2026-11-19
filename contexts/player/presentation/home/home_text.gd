@@ -11,18 +11,9 @@ const NO_NAME := "名前なし"
 const DASH := "-"
 
 
-## 整数を 3 桁区切りにする（1000 → "1,000"。負数も扱う）。
+## 整数を 3 桁区切りにする（1000 → "1,000"。負数も扱う）。規則は共通部品 NumberText に 1 か所だけ置く。
 static func format_number(value: int) -> String:
-	var digits := str(absi(value))
-	var out := ""
-	var count := 0
-	# 後ろから 3 桁ごとに区切りを入れる
-	for i in range(digits.length() - 1, -1, -1):
-		if count > 0 and count % 3 == 0:
-			out = "," + out
-		out = digits[i] + out
-		count += 1
-	return ("-" if value < 0 else "") + out
+	return NumberText.format_number(value)
 
 
 ## 名前の位置の文字列。未ログインは「ログインしていません」、名前が空なら「名前なし」。

@@ -2,6 +2,7 @@
 #
 # 検査の流れ（make check = CI と同じ。順に実行し、1 つでも失敗したらそこで止まる）:
 #   check-deps（依存方向チェックと、その単体テスト）
+#     → check-icons（アイコンの規格と、生成スクリプトの出力との一致）
 #     → lint（gdlint）→ format-check（gdformat --check）→ test（GdUnit4）
 #     → check-release（製品用の複製を作り、ヘッドレスで起動して確かめる）
 # *-quiet 系（check-quiet / test-quiet / check-release-quiet）は同じ検査で、画面には結果だけを出す。全文は .make-logs/ に残る。
@@ -12,7 +13,7 @@
 #   - Godot は PATH 上の godot。別の場所なら `GODOT_BIN=/path/to/godot make ...`
 #   - lint / format-check / format は .venv-tools が無いと失敗する（setup-tools を先に）
 
-.PHONY: help setup-tools setup-gdunit4 check-deps lint format-check format import test test-quiet check check-quiet clean-reports release-project check-release check-release-quiet
+.PHONY: help setup-tools setup-gdunit4 check-deps lint format-check format import test test-quiet check check-quiet clean-reports release-project check-release check-release-quiet icons check-icons
 
 # Godot 本体。環境変数 GODOT_BIN で上書きできる（GdUnit4 の runtest.sh と同じ変数名）。
 # 未指定なら PATH 上の godot を使う。
@@ -69,6 +70,18 @@ setup-tools: setup-gdunit4 ## lint / format 用の venv（.venv-tools）と gdto
 check-deps: ## 依存方向チェック（単体テスト → 実リポジトリの検査）
 	$(PYTHON) -m unittest discover -s tools/tests
 	$(PYTHON) tools/check_dependencies.py
+
+# アイコン（自作の SVG）と読み込み表 item_icon_table.gd を生成する。標準ライブラリだけの Python なので
+# setup-tools は不要。出力は決定的（何度実行しても同じ）。mst_item に行が増えたら tools/icons/generate_icons.py の
+# 表に 1 行足してから実行する（手順は docs/ASSETS.md）
+icons: ## アイコン（assets/icons/）と core/presentation/item_icon/item_icon_table.gd を生成する
+	$(PYTHON) tools/icons/generate_icons.py
+
+# 生成と同じ内容か（手編集・再生成し忘れ・表に無い SVG・SVG の無い表の行）と、各 SVG の規格
+# （viewBox・サイズ・禁止要素・線の太さ・余白）を検査する。ファイルは書き換えない。軽いので make check に含む。
+# 検査ツール自身の単体テスト（tools/tests/test_check_icons.py）は check-deps が先に回す
+check-icons: ## アイコンの規格と、生成スクリプトの出力との一致を検査する（書き換えない）
+	$(PYTHON) tools/icons/check_icons.py
 
 # 前提: setup-tools 済み。設定は .gdlintrc。違反があると終了コード 1
 lint: ## gdlint（新構成のディレクトリ）
@@ -143,12 +156,13 @@ check-release-quiet: ## check-release。結果だけ表示（エージェント�
 	$(call run_quiet,check-release,$(MAKE) --no-print-directory check-release)
 
 # CI と同じ検査をローカルで回す。依存の並び順がそのまま実行順（make は左から順に実行し、失敗で止まる）
-check: check-deps lint format-check test check-release ## CI と同じ検査（依存方向 → lint → format → テスト → 製品用の複製の起動）
+check: check-deps check-icons lint format-check test check-release ## CI と同じ検査（依存方向 → アイコン → lint → format → テスト → 製品用の複製の起動）
 
 # 実行順は check と同じ。各段のログは .make-logs/<段>.log。どの段で落ちたかは "NG <段>" で分かる
 check-quiet: ## check と同じ検査。結果だけを表示（エージェント向け）
 	$(call run_quiet,check-deps-test,$(PYTHON) -m unittest discover -s tools/tests)
 	$(call run_quiet,check-deps,$(PYTHON) tools/check_dependencies.py)
+	$(call run_quiet,check-icons,$(PYTHON) tools/icons/check_icons.py)
 	$(call run_quiet,lint,$(VENV)/bin/gdlint $(SRC_DIRS))
 	$(call run_quiet,format-check,$(VENV)/bin/gdformat --check $(SRC_DIRS))
 	@$(MAKE) --no-print-directory test-quiet

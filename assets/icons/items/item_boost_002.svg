@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<defs><linearGradient id="g_glass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#EEF0FF"/><stop offset="1" stop-color="#C9CEFF"/></linearGradient><linearGradient id="g_sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#A8E4FF"/><stop offset="1" stop-color="#5CC4FF"/></linearGradient><linearGradient id="g_navy" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5A5CB0"/><stop offset="1" stop-color="#3A3C84"/></linearGradient><linearGradient id="g_cream" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#FFF3CF"/></linearGradient><clipPath id="c_body"><path d="M30 78 A34 34 0 1 0 98 78 A34 34 0 1 0 30 78 Z"/></clipPath></defs>
+<ellipse cx="64" cy="114" rx="34" ry="4" fill="#0B0B2A" fill-opacity="0.28"/>
+<rect x="54" y="14" width="20" height="30" rx="4" fill="url(#g_glass)"/>
+<circle cx="64" cy="78" r="34" fill="url(#g_glass)"/>
+<rect x="28" y="64" width="72" height="52" fill="url(#g_sky)" clip-path="url(#c_body)"/>
+<rect x="50" y="8" width="28" height="12" rx="6" fill="url(#g_navy)"/>
+<rect x="38" y="62" width="8" height="22" rx="4" fill="#FFFFFF" fill-opacity="0.45"/>
+<path d="M64 60 L84 68 L84 86 C84 98 74 104 64 108 C54 104 44 98 44 86 L44 68 Z" fill="url(#g_cream)"/>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<defs><linearGradient id="g_rose" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFA3BA"/><stop offset="1" stop-color="#FF6F91"/></linearGradient><linearGradient id="g_wood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E0B38A"/><stop offset="1" stop-color="#BE8657"/></linearGradient><linearGradient id="g_lime" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#D6F59A"/><stop offset="1" stop-color="#9AE05A"/></linearGradient></defs>
+<ellipse cx="64" cy="114" rx="34" ry="4" fill="#0B0B2A" fill-opacity="0.28"/>
+<circle cx="50" cy="72" r="30" fill="url(#g_rose)"/>
+<circle cx="78" cy="72" r="30" fill="url(#g_rose)"/>
+<rect x="60" y="22" width="8" height="22" rx="4" fill="url(#g_wood)"/>
+<path d="M68 34 C78 14 98 14 102 22 C96 38 80 42 68 34 Z" fill="url(#g_lime)"/>
+</svg>

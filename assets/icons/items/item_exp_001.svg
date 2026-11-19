@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<defs><linearGradient id="g_mint" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#B5F5DC"/><stop offset="1" stop-color="#5EE0B0"/></linearGradient><linearGradient id="g_cream" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#FFF3CF"/></linearGradient><linearGradient id="g_gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE08A"/><stop offset="1" stop-color="#FFC245"/></linearGradient></defs>
+<ellipse cx="64" cy="114" rx="23.8" ry="4" fill="#0B0B2A" fill-opacity="0.28"/>
+<path d="M64 42 L85 60.2 L85 93.8 L64 112 L43 93.8 L43 60.2 Z" fill="url(#g_mint)"/>
+<path d="M64 42 L43 60.2 L43 93.8 L64 112 Z" fill="#FFFFFF" fill-opacity="0.28"/>
+<path d="M64 73.92 L67.92 84 L78.56 85.12 L67.92 89.6 L64 100.8 L60.08 89.6 L49.44 85.12 L60.08 84 Z" fill="url(#g_cream)"/>
+<circle cx="104" cy="24" r="5" fill="url(#g_gold)"/>
+</svg>
