@@ -125,7 +125,7 @@ X-Client-Signature: HMAC-SHA256("{timestamp}:{nonce}:{request_body}")
 
 ### 5. 未同意の規約の取得
 
-**エンドポイント**: `GET /agreement/pending`（認証付き）
+**エンドポイント**: `POST /agreement/pending`（認証付き。ボディは空の `{}`、冪等キーは付けない）
 
 規約画面の表示時に呼ぶ（`agreement` の `FetchPendingAgreementsUseCase`）。`agreement_list` が空なら画面を見せずにログインボーナスへ進む。
 

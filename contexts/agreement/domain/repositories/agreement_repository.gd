@@ -7,7 +7,7 @@ class_name AgreementRepository
 extends RefCounted
 
 
-## GET /agreement/pending。未同意の規約の一覧。
+## POST /agreement/pending。未同意の規約の一覧。
 func fetch_pending() -> PendingAgreementsResult:
 	push_error("未実装: AgreementRepository.fetch_pending")
 	return null
