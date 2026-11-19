@@ -174,7 +174,7 @@ HTTP ステータスで分類する。401・429・503（メンテ）には `erro
 | POST `/auth/sign_in`（4 節） | 保存トークンがあるとき。または sign_up が 10004 のとき | `device_id`、`device_info`（**4 項目すべて必須**、`app_version` は 20 文字以内） | なし | 10002 → sign_up に切り替え（3-3）。他は 1-3 の表 |
 | POST `/auth/refresh_token`（5 節） | `ApiClient` が認証付きリクエストで 401 を受けたとき（自動。refresh の送信と失敗の判断は `ApiClient`（core）が持つ。契約は token の供給 `ApiAuthProvider` に絞り、`auth` の `local_auth_token_repository` が実装する） | `refresh_token`（64 桁） | なし | 299 の 10002 / 10003、200 以外、解析失敗はすべてログアウト扱い（3-5） |
 | POST `/auth/login`（6 節） | 認証成功の直後。title が 1 回 | ボディなし（`{}`） | **付ける** | 1-3 の表。成功するまで次へ進まない。成功時は 9 項目を保持（4 節） |
-| GET `/agreement/pending`（7 節） | 規約画面の `_ready` | なし | なし（GET は素通し） | 1-3 の表。スキップしない |
+| POST `/agreement/pending`（7 節） | 規約画面の `_ready` | なし | なし（list 系なので冪等キーは付けない） | 1-3 の表。スキップしない |
 | POST `/agreement/consent`（8 節） | 「すべての規約に同意して続ける」。規約ごとに 1 件ずつ、直列 | `sys_agreement_id` | **付ける（規約ごとに 1 キー）** | 24002 は成功扱い。24001 は pending を取り直す。他は 1-3 の表 |
 | POST `/auth/version`（9 節） | 使わない（GET を使う） | - | - | - |
 
@@ -319,7 +319,7 @@ overview の「保存済みトークンの有無で最初に呼ぶ API を決め
 | `.claude/architecture.md` | シーン構成表に規約画面と api_test が部分的 | 改訂済み（10 節に規約画面を含む。移行後のパス） |
 | `.claude/architecture.md` | 依存関係ルール | 改訂済み（2 節。循環は core の契約と `EventBus` で避ける） |
 | `.claude/api.md` | ベース URL が `http://localhost:8080/api` | `http://localhost:8090/api`。配信ホストは `:8091`（`ApiConfig`） |
-| `.claude/api.md` | `/auth/version`・`/agreement/*`・規約画面の記載がそもそも無い（認証・login・refresh だけ） | `GET /auth/version`、`GET /agreement/pending`、`POST /agreement/consent` を追加。項目は複製せず、サーバー api.md を参照。クライアントが使うヘッダー（`X-Unique-Request-Identifier`、`X-Master-Hash`、`X-Master-Update-Required`）を追記 |
+| `.claude/api.md` | `/auth/version`・`/agreement/*`・規約画面の記載がそもそも無い（認証・login・refresh だけ） | `GET /auth/version`、`POST /agreement/pending`、`POST /agreement/consent` を追加。項目は複製せず、サーバー api.md を参照。クライアントが使うヘッダー（`X-Unique-Request-Identifier`、`X-Master-Hash`、`X-Master-Update-Required`）を追記 |
 | `.claude/api.md` | login のレスポンス例が 5 項目で、`trx_unit_list` の項目が `mst_unit_id: 1`（数値）、`total_paid_amount: 0` | 6 種の一覧・`total_paid_amount` が文字列 `"0.00"` を反映、または「項目はサーバー api.md を参照」にして例を削る |
 | `.claude/api.md` | エラー表が 299 と 503 のみ | 401 / 409 / 422 / 429 / 503（`error_code` 有無）を追加し、HTTP ステータスで分類することを書く |
 | `.claude/implementation-history.md` | 追記 | この機能の実装を追加（古い記述は直さない。履歴） |

@@ -42,7 +42,7 @@ func _on_reset_device_button_pressed() -> void:
 
 
 func _on_get_player_button_pressed() -> void:
-	await _call_api("GET", "/player/me")
+	await _call_api("POST", "/player/me")
 
 
 func _on_gacha_button_pressed() -> void:
@@ -58,15 +58,15 @@ func _on_unit_levelup_button_pressed() -> void:
 
 
 func _on_friend_list_button_pressed() -> void:
-	await _call_api("GET", "/friend/list")
+	await _call_api("POST", "/friend/list")
 
 
 func _on_friend_apply_list_button_pressed() -> void:
-	await _call_api("GET", "/friend/apply/list")
+	await _call_api("POST", "/friend/apply/list")
 
 
 func _on_mailbox_list_button_pressed() -> void:
-	await _call_api("GET", "/mailbox/list")
+	await _call_api("POST", "/mailbox/list")
 
 
 ## バージョン確認（サーバーの実装は GET。deploy_version は 0 = 未取得として問い合わせる）

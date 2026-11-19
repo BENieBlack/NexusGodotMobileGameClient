@@ -7,7 +7,7 @@
 ##   godot --headless --path . -s res://debug/verify_auth_login.gd
 ##   向き先: 環境変数 NEXUS_API_BASE_URL（ApiConfig の優先順。既定 http://localhost:8090/api）
 ## 流れ（保存先は user://verify_auth/。毎回消して新しい端末として始める）:
-##   A. sign_up → login → GET /agreement/pending →（あれば）consent → もう一度 pending
+##   A. sign_up → login → POST /agreement/pending →（あれば）consent → もう一度 pending
 ##      → 存在しない規約への consent（24001 → pending の取り直し）
 ##      規約をシードしたサーバーで consent の正常系を確かめるときは、成功応答の本文が `[]`
 ##      （空の配列）でも ApiClient が成功扱いにすること（A4 が OK になること）を見る

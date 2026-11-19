@@ -81,7 +81,7 @@ NexusMobileGameClient-Godot/
   ↓    sys_player・trx 一覧 5 種（unit / item / wallet / equipment / stamina）と有償ダイヤ `trx_diamond`（単数）・login_bonus_list を取得
   ↓    login が成功するまで先へ進まない（失敗はタイトル上のエラー表示と「再試行」）
   ↓
-規約画面（GET /api/agreement/pending。未同意が無ければ見えない。同意は POST /api/agreement/consent）
+規約画面（POST /api/agreement/pending。未同意が無ければ見えない。同意は POST /api/agreement/consent）
   ↓
 ログインボーナス画面（通信しない）→ ホーム画面
 ```

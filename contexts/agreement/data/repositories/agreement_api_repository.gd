@@ -2,8 +2,8 @@
 ##
 ## 目的: ApiClient の結果（ApiResult）を、domain が扱う結果型（AppError つき）に直す。
 ## 流れ:
-##   fetch_pending: GET /agreement/pending → agreement_list（null と欠落は空。D3）を SysAgreement の配列にする。
-##     応答が小さいので専用の *_response.gd は作らず、ここで取り出す。GET なので冪等キーは付けない
+##   fetch_pending: POST /agreement/pending → agreement_list（null と欠落は空。D3）を SysAgreement の配列にする。
+##     応答が小さいので専用の *_response.gd は作らず、ここで取り出す。ボディは空の {}。list 系なので冪等キーは付けない
 ##   consent: POST /agreement/consent {sys_agreement_id} を冪等キーつきで送る。応答の本文（空の JSON）は使わない
 ## 失敗の扱い: ApiResult.to_app_error() で返す。24001・24002 の判断は UseCase（ここは業務の判断をしない）。
 class_name AgreementApiRepository
@@ -17,7 +17,7 @@ func _init(api_client: ApiClient) -> void:
 
 
 func fetch_pending() -> PendingAgreementsResult:
-	var api_result := await _api_client.request("GET", "/agreement/pending")
+	var api_result := await _api_client.request("POST", "/agreement/pending")
 	if not api_result.ok:
 		return PendingAgreementsResult.new([], api_result.to_app_error())
 	var agreements: Array[SysAgreement] = []

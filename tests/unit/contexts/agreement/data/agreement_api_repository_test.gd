@@ -12,7 +12,7 @@ func before_test() -> void:
 
 
 ## 前提: agreement_list が 1 件。操作: fetch_pending。
-## 期待: GET /agreement/pending（冪等キー無し・本文無し）で、5 項目が型付きで取り込める。
+## 期待: POST /agreement/pending（冪等キー無し・空の {} 本文）で、5 項目が型付きで取り込める。
 func test_fetch_pending_parses_list() -> void:
 	var item := {
 		"sys_agreement_id": 1,
@@ -30,8 +30,8 @@ func test_fetch_pending_parses_list() -> void:
 	assert_int(result.agreements[0].sys_agreement_id).is_equal(1)
 	assert_str(result.agreements[0].title).is_equal("利用規約")
 	var call: Dictionary = _client.calls[0]
-	assert_str(call["method"]).is_equal("GET")
-	assert_str(call["body"]).is_empty()
+	assert_str(call["method"]).is_equal("POST")
+	assert_str(call["body"]).is_equal("{}")
 	var headers: PackedStringArray = call["headers"]
 	assert_str(FakeApiClient.header_value(headers, "X-Unique-Request-Identifier")).is_empty()
 
