@@ -294,3 +294,51 @@ func test_value_icons_shown_when_not_logged_in() -> void:
 	)
 	assert_object(icon.texture).is_not_null()
 	assert_str(_text(screen, COIN)).is_equal("-")
+
+
+## 前提: ログイン済みのホーム（コイン 1000・ダイヤ 50・スタミナ 50）。操作: ツリーに入れて描画を 2 フレーム回す
+## （ヘッドレスでもコンテナのレイアウトは計算される）。期待: 3 つの値ラベルが表示中・幅が文字の幅以上・高さも 0 でなく、
+## 文字が期待どおりで、同じ行の ItemIcon の右に並ぶ。
+## なぜ必要か: 値ラベルは text_overrun_behavior=trim（最小幅 0）で、ValueRow（HBox）の中で横に広げる指定が無いと
+## 幅 1 に潰れ、文字が消えていた（値は取れているのに画面に出ない）。テキストの一致だけでは検出できなかった。
+func test_value_labels_have_nonzero_size_beside_icons() -> void:
+	var lists := _stamina(50)
+	lists["trx_wallet_list"] = [{"mst_item_id": "coin", "free_amount": 1000}]
+	lists["trx_item_list"] = [{"mst_item_id": "free_diamond", "free_amount": 50}]
+	_login({"my_id": "a", "level": 1}, lists)
+	var screen := await _show_home()
+	# 親が Control でないテストでは画面の大きさが 0 のままなので、実機と同じ 1080x1920 にして並べ直す
+	screen.size = Vector2(1080, 1920)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var pairs := {
+		STAMINA: ["Margin/Root/StaminaPanel/VBox/ValueRow/StaminaIcon", "50 / 50"],
+		COIN: ["Margin/Root/CurrencyRow/CoinPanel/VBox/ValueRow/CoinIcon", "1,000"],
+		DIAMOND: ["Margin/Root/CurrencyRow/DiamondPanel/VBox/ValueRow/DiamondIcon", "50"],
+	}
+	for label_path: String in pairs:
+		var label := screen.get_node(label_path) as Label
+		var icon := screen.get_node(pairs[label_path][0]) as ItemIcon
+		assert_bool(label.is_visible_in_tree()).is_true()
+		# 幅は文字が収まる大きさ（trim の最小幅は 1 で、0 より大きいだけでは「消えている」を見逃す）
+		var text_width := (
+			label
+			. get_theme_font("font")
+			. get_string_size(
+				label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, label.get_theme_font_size("font_size")
+			)
+			. x
+		)
+		assert_float(label.size.x).is_greater_equal(text_width)
+		assert_float(label.size.y).is_greater(0.0)
+		assert_str(label.text).is_equal(pairs[label_path][1])
+		# 同じ行: 縦の範囲が重なり、ラベルはアイコンの右にある
+		var label_rect := label.get_global_rect()
+		var icon_rect := icon.get_global_rect()
+		assert_float(label_rect.position.x).is_greater_equal(icon_rect.end.x - 0.5)
+		(
+			assert_bool(
+				label_rect.position.y < icon_rect.end.y and icon_rect.position.y < label_rect.end.y
+			)
+			. is_true()
+		)

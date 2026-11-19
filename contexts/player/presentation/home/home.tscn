@@ -124,6 +124,8 @@ size_flags_vertical = 4
 
 [node name="StaminaValueLabel" type="Label" parent="Margin/Root/StaminaPanel/VBox/ValueRow"]
 layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
 theme_override_font_sizes/font_size = 72
 text = "-"
 text_overrun_behavior = 3
@@ -162,6 +164,8 @@ size_flags_vertical = 4
 
 [node name="CoinValueLabel" type="Label" parent="Margin/Root/CurrencyRow/CoinPanel/VBox/ValueRow"]
 layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
 theme_override_font_sizes/font_size = 56
 text = "-"
 text_overrun_behavior = 3
@@ -190,6 +194,8 @@ size_flags_vertical = 4
 
 [node name="DiamondValueLabel" type="Label" parent="Margin/Root/CurrencyRow/DiamondPanel/VBox/ValueRow"]
 layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
 theme_override_font_sizes/font_size = 56
 text = "-"
 text_overrun_behavior = 3
