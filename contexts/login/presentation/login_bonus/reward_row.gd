@@ -13,5 +13,5 @@ const ICON_SIZE := 56
 
 
 func setup(display: LoginBonusDisplay) -> void:
-	_icon.setup(display.bonus.type, display.bonus.id, display.item_type, ICON_SIZE)
+	_icon.setup(display.icon_type, display.bonus.id, display.item_type, ICON_SIZE)
 	_label.text = LoginBonusPresenter.build_row_text(display)

@@ -53,11 +53,11 @@ class FakeItems:
 	extends MstItemRepository
 
 	func get_by_id(id: String) -> MstItem:
-		if not ITEM_IDS.has(id):
+		if not ITEM_IDS.has(id) and id != "gold":
 			return null
 		var item := MstItem.new()
 		item.id = id
-		item.name = "アイテム " + id
+		item.name = "ゴールド" if id == "gold" else "アイテム " + id
 		item.type = "recovery"
 		return item
 
@@ -151,6 +151,10 @@ func _build(name: String, repository: LocalLoginBonusRepository) -> LoginBonusSt
 			rewards_count = 5 if name == "max" else 2
 	var list: Array[LoginBonus] = []
 	for i in range(rewards_count):
+		# 1 行目はサーバーの実際の形（wallet は type=gold・id=gold で来る）にして、行の絵・名前の引きを確かめる
+		if i == 0:
+			list.append(LoginBonus.new("u0", "gold", "gold", 4000))
+			continue
 		list.append(LoginBonus.new("u%d" % i, "item", ITEM_IDS[i % ITEM_IDS.size()], 100 * (i + 1)))
 	repository.replace(list)
 	return masters
