@@ -267,3 +267,46 @@ func test_download() -> void:
 	)
 	_client.handler = func(_m, _u, _h, _b): return FakeApiClient.network_error()
 	assert_int((await _client.download("http://cdn.test/f")).kind).is_equal(AppError.Kind.NETWORK)
+
+
+# --- 8. 直近の失敗の記録（last_error。e2e の原因表示用） ---
+
+
+## 前提: 405 を返す。期待: last_error にメソッド・パス・HTTP 状態・Kind が残り、続く成功では消えない。
+func test_last_error_records_failure_and_survives_success() -> void:
+	assert_dict(_client.last_error).is_empty()
+	_client.handler = func(_m: String, _u: String, _h: PackedStringArray, _b: String) -> Dictionary:
+		return FakeApiClient.response(405, {"message": "Method Not Allowed"})
+	await _client.request("GET", "/agreement/pending")
+	assert_str(_client.last_error["method"]).is_equal("GET")
+	assert_str(_client.last_error["endpoint"]).is_equal("/agreement/pending")
+	assert_int(_client.last_error["http_status"]).is_equal(405)
+	assert_int(_client.last_error["kind"]).is_equal(AppError.Kind.SERVER_ERROR)
+	_client.handler = func(_m: String, _u: String, _h: PackedStringArray, _b: String) -> Dictionary:
+		return FakeApiClient.response(200, {"ok": true})
+	await _client.request("POST", "/ok")
+	assert_int(_client.last_error["http_status"]).is_equal(405)
+
+
+## 通信失敗（status 0）・クエリ付きパス・2 回目の失敗での上書き・連番の増加。
+func test_last_error_network_query_and_overwrite() -> void:
+	await _client.request("GET", "/auth/version?deploy_version=0")
+	assert_int(_client.last_error["http_status"]).is_equal(0)
+	assert_int(_client.last_error["kind"]).is_equal(AppError.Kind.NETWORK)
+	assert_str(_client.last_error["endpoint"]).is_equal("/auth/version")
+	assert_int(_client.last_error["serial"]).is_equal(1)
+	_client.handler = func(_m: String, _u: String, _h: PackedStringArray, _b: String) -> Dictionary:
+		return FakeApiClient.response(409, {"message": "x"})
+	await _client.request("POST", "/second")
+	assert_str(_client.last_error["endpoint"]).is_equal("/second")
+	assert_int(_client.last_error["serial"]).is_equal(2)
+	assert_int(_client.error_serial).is_equal(2)
+
+
+## debug_override（e2e の偽の失敗）も記録される。
+func test_last_error_records_debug_override() -> void:
+	_client.debug_override = func(_m: String, _e: String) -> Variant:
+		return ApiResult.make_error(AppError.Kind.MAINTENANCE, 503)
+	await _client.request("POST", "/auth/login")
+	assert_int(_client.last_error["http_status"]).is_equal(503)
+	assert_int(_client.last_error["kind"]).is_equal(AppError.Kind.MAINTENANCE)

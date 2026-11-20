@@ -35,6 +35,11 @@
 ##                          オブジェクト数・ノード数）を毎フレーム集めて `E2E_PROBE:` の行に平均・最大を出す（FrameProbe。
 ##                          client_design.md 7 節）。記録中は画面の操作（クリック・終了）を待つ。ヘッドレスでは描画統計が
 ##                          取れないので、行に `render=unavailable(headless)` が付く。--write-movie とは併用しない
+##   --e2e-stall-sec=<秒>   同じ画面に居続けて進まないとみなす秒数（既定 30。0 以下で検出しない）。クリック回数の条件と両方
+##                          満たしたら、すぐ `E2E_RESULT: FAIL stalled ...`（コード 1）で終わる（StallDetector）
+##   --e2e-stall-clicks=<回> 上と合わせて見る、その画面でのクリック回数（既定 5）。dwell で止まっているだけ・再試行を
+##                          数回押す確認では失敗にしない。失敗し続ける画面を長く見せる使い方（429・503 を --e2e-fail-count で
+##                          約 20 回を超えて返す動画など）は FAIL になるので、--e2e-stall-sec=0 で検出を切る
 ##   --e2e-timeout=<秒>     この秒数で打ち切る（既定 120。コード 1）
 ## クリックの送り方: 実際のマウス操作に近づけ、移動 → 押下 → 数フレーム → 解放の順に送る（動画で押下の
 ##   見た目が出る）。座標はビューポート座標で指定し、ウィンドウ座標へ変換して送る（下の make_* と
@@ -42,7 +47,9 @@
 ## 操作（画面ごと。シーンのパスで判定する）:
 ##   タイトル: 再試行ボタンが見えて押せるなら押す / 規約: 再試行 → 同意ボタンの順に押す
 ##   ログインボーナス: 画面中央をクリック / ホーム: 2 秒（+ dwell + home-hold）後にホームの値を出して終了
-## 出力: `E2E: ...` の行に経過、最後に `E2E_RESULT: OK ...`（コード 0）か `E2E_RESULT: TIMEOUT ...`（コード 1）。
+## 出力: `E2E: ...` の行に経過、最後に `E2E_RESULT: OK ...`（コード 0）、
+##       `E2E_RESULT: FAIL stalled scene=… last_api_error=…`
+##       （画面が進まない。コード 1。last_api_error は直近の API 失敗。無ければ none）か `E2E_RESULT: TIMEOUT ...`（コード 1）。
 ##       トークン・秘密鍵・device_id は出さない。
 extends Node
 
@@ -75,6 +82,7 @@ const TERMS_SCROLL_INTERVAL := 0.6
 const TERMS_SCROLL_RATIO := 0.6
 
 const FrameProbe := preload("res://debug/frame_probe.gd")
+const StallDetector := preload("res://debug/e2e_stall_detector.gd")
 
 ## 引数の辞書（キーは "e2e-reset" のように先頭の -- を除いた名前。値の無いものは true）
 var _args: Dictionary = {}
@@ -111,6 +119,8 @@ var _home_hold: float = 0.0
 ## ホームに入った最初の値（login_stamina・open_stamina の出力用）。入るまでは null
 var _home_open_summary: HomeSummary = null
 var _home_open_stamina: int = -1
+## 「画面が進まない」の検出（_ready で引数から作る）。同じ画面で押し続けても遷移しないと FAIL にする
+var _stall: RefCounted = StallDetector.new()
 
 
 func _ready() -> void:
@@ -124,6 +134,7 @@ func _ready() -> void:
 	_timeout = float(_args.get("e2e-timeout", 120))
 	_dwell = float(_args.get("e2e-dwell", 0))
 	_home_hold = home_hold_seconds(_args)
+	_stall = StallDetector.from_args(_args)
 
 	# --- 0. 端末時計のずれ・X-Platform の省略（ホームの確認用） ---
 	if _args.has("e2e-clock-skew"):
@@ -173,6 +184,15 @@ func _process(delta: float) -> void:
 
 	# --- 描画の指標の記録（--e2e-frame-probe）。記録中は画面の操作を止める（記録の窓の途中で画面が変わらないように） ---
 	if not _run_probe(delta):
+		return
+
+	# --- 画面が進まない検出。同じ画面で秒数・クリック回数が閾値に達したら、原因を添えてすぐ失敗にする ---
+	var api_client: ApiClient = AppContext.api_client()
+	_stall.observe(_scene_path, delta, api_client.error_serial)
+	if _stall.is_stalled():
+		var error_screen := _screen_error(scene)
+		print(_stall.fail_line(api_client.last_error, error_screen[0], error_screen[1]))
+		_quit(1)
 		return
 
 	match _scene_path:
@@ -390,7 +410,7 @@ func _terms_open(scene: Node, viewer: Node, agree: Button) -> void:
 		return
 	var list := scene.get_node_or_null(AGREEMENT_LIST_PATH)
 	if list != null and list.get_child_count() > 0:
-		_click_if_ready(list.get_child(0).get_node_or_null("OpenButton") as Button)
+		_click_if_ready(list.get_child(0).get_node_or_null("OpenButton") as Button, false)
 
 
 ## VIEWING: 取得が終わる（「読み込み中...」でなくなる）まで数えず、終わったら dwell 秒見せる。
@@ -436,7 +456,7 @@ func _terms_close(viewer: Node) -> void:
 	var close := viewer.get_node_or_null(TERMS_CLOSE_PATH) as Button
 	if close != null and not _is_clicking and _terms_time >= 0.5:
 		_terms_time = 0.0
-		_click_at(close.get_global_rect().get_center())
+		_click_at(close.get_global_rect().get_center(), false)
 
 
 func _set_terms_phase(phase: TermsPhase) -> void:
@@ -459,20 +479,45 @@ func _click_retry_if_ready(retry: Button) -> void:
 
 
 ## ボタンが見えていて押せるとき、画面に出てから ACTION_DELAY 秒後に中心をクリックする。
-func _click_if_ready(button: Button) -> void:
+## counts_as_progress は _click_at へ渡す（進まない検出に数えるか）。
+func _click_if_ready(button: Button, counts_as_progress: bool = true) -> void:
 	if button == null or not button.is_visible_in_tree() or button.disabled:
 		return
 	if _scene_time < ACTION_DELAY + _dwell or _is_clicking:
 		return
 	_scene_time = 0.0
-	_click_at(button.get_global_rect().get_center())
+	_click_at(button.get_global_rect().get_center(), counts_as_progress)
+
+
+## 画面のエラー表示（タイトル・規約）を [再試行ボタンが見えているか, StatusLabel の文] で返す。
+## 対象外の画面は [false, ""]。進まない失敗の行に添えて、API エラーと画面の表示を突き合わせられるようにする。
+func _screen_error(scene: Node) -> Array:
+	var retry_path := ""
+	var status_path := ""
+	match _scene_path:
+		SceneRouter.TITLE_SCENE:
+			retry_path = TITLE_RETRY_PATH
+			status_path = TITLE_STATUS_PATH
+		SceneRouter.AGREEMENT_SCENE:
+			retry_path = AGREEMENT_RETRY_PATH
+			status_path = AGREEMENT_STATUS_PATH
+		_:
+			return [false, ""]
+	var retry := scene.get_node_or_null(retry_path) as Button
+	var status := scene.get_node_or_null(status_path) as Label
+	if retry == null or status == null:
+		return [false, ""]
+	return [retry.visible, status.text]
 
 
 ## ビューポート座標の位置を左クリックする（移動 → 押下 → PRESS_HOLD_FRAMES フレーム → 解放）。
 ## 移動を先に送るのは、Control がホバー（マウスの下にある状態）になってから押されるようにするため。
 ## 押下と解放を同じフレームに送ると、押下の見た目が出ず、環境によって Button が反応しないことがある。
-func _click_at(viewport_position: Vector2) -> void:
+## counts_as_progress は、画面を進めるためのクリックか（進まない検出の回数に数える。規約の閲覧の開閉は数えない）。
+func _click_at(viewport_position: Vector2, counts_as_progress: bool = true) -> void:
 	_is_clicking = true
+	if counts_as_progress:
+		_stall.record_click()
 	var window_position := to_window_position(
 		viewport_position, get_viewport().get_final_transform()
 	)

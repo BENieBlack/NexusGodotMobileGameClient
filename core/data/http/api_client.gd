@@ -77,6 +77,17 @@ const NOT_TRIED_KINDS: Array[AppError.Kind] = [
 ## 製品のコードは設定しない（未設定なら何も起きない）。
 var debug_override: Callable = Callable()
 
+## 直近に失敗した API 呼び出しの記録（デバッグ・e2e の原因表示用）。空なら失敗なし。
+## キー: serial（int。失敗のたびに 1 ずつ増える連番。「ある時点より後のエラーか」を見分ける）/
+##       method（String）/ endpoint（String。クエリは落としたパス）/ http_status（int。通信失敗は 0）/
+##       kind（AppError.Kind）。保持するだけで何もしない軽い仕組み（本文・ヘッダー・トークンは入れない）。
+## request() と debug_override の偽の失敗は記録する。download() は _send を通らないので記録しない。
+## e2e ドライバー（debug/e2e_driver.gd）が、画面が進まないときに「どの API がなぜ失敗したか」を
+## 失敗メッセージに添えるために読む。製品のコードは読まない。
+var last_error: Dictionary = {}
+## 記録した失敗の回数（last_error の serial の元）。成功では増えない
+var error_serial: int = 0
+
 ## 今 refresh を実行中か（refresh を 1 本にまとめるためのフラグ）
 var _is_refreshing: bool = false
 
@@ -235,6 +246,7 @@ func _send(method: String, endpoint: String, body: Dictionary, options: Dictiona
 	if debug_override.is_valid():
 		var faked: Variant = debug_override.call(method, endpoint)
 		if faked is ApiResult:
+			_remember_error(method, endpoint, faked)
 			return faked
 	var use_auth: bool = options.get("auth", true)
 	var headers := _build_headers(
@@ -248,6 +260,7 @@ func _send(method: String, endpoint: String, body: Dictionary, options: Dictiona
 		method, ApiConfig.api_base_url() + endpoint, headers, body_string, timeout
 	)
 	var result := _classify(response, use_auth, bool(options.get("allow_empty_body", false)))
+	_remember_error(method, endpoint, result)
 
 	# X-Platform の欠落・不正（299 の 99003）は利用者には直せない実装の誤り。画面は汎用の
 	# BUSINESS 表示のままにし、開発者が気づけるようログに 1 回だけ出す（値は Apple / Google のみで秘密ではない）
@@ -260,6 +273,21 @@ func _send(method: String, endpoint: String, body: Dictionary, options: Dictiona
 		if has_master_update_required(result.headers):
 			master_update_required.emit()
 	return result
+
+
+## 失敗した結果なら last_error に上書きで残す（成功では何もしない。直近の失敗を消さない）。
+func _remember_error(method: String, endpoint: String, result: ApiResult) -> void:
+	if result.ok:
+		return
+	error_serial += 1
+	last_error = {
+		"serial": error_serial,
+		"method": method,
+		# クエリ（?deploy_version=0 など）は落とす（値に秘密が混ざらないように、パスだけ残す）
+		"endpoint": endpoint.split("?")[0],
+		"http_status": result.http_status,
+		"kind": result.kind,
+	}
 
 
 ## リクエストヘッダーを組み立てる。
