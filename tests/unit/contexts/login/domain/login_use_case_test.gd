@@ -63,3 +63,25 @@ func test_empty_key_is_generated() -> void:
 	await _use_case.handle()
 	assert_int(_login.keys.size()).is_equal(1)
 	assert_str(_login.keys[0]).has_length(36)
+
+
+## 前提: 段の進捗つきの成功の結果。期待: login の Repository に段の進捗が置かれる。
+## 失敗した login では前回の段の進捗を壊さない。
+func test_success_replaces_calendars_and_failure_keeps_them() -> void:
+	var calendars := LoginBonusCalendars.new(LoginBonusCalendar.new("lb1", 2, true, true))
+	_login.result = LoginDataResult.new(null, {"my_id": "a"}, {}, [], {}, 0, false, calendars)
+	await _use_case.handle("k")
+	assert_str(_bonuses.calendars().normal.mst_id).is_equal("lb1")
+	assert_object(_bonuses.calendars().vip).is_null()
+
+	_login.result = LoginDataResult.new(AppError.new(AppError.Kind.NETWORK))
+	await _use_case.handle("k")
+	assert_str(_bonuses.calendars().normal.mst_id).is_equal("lb1")
+
+	# 旧サーバー（新キー無し）の成功では、前回の段を残さず空にする。clear でも空になる
+	_login.result = LoginDataResult.new(null, {"my_id": "a"})
+	await _use_case.handle("k")
+	assert_bool(_bonuses.calendars().has_any()).is_false()
+	_bonuses.replace_calendars(calendars)
+	_bonuses.clear()
+	assert_bool(_bonuses.calendars().has_any()).is_false()

@@ -115,3 +115,21 @@ static func create_item_master_db(path: String) -> bool:
 			return false
 	database.close_db()
 	return true
+
+
+## path に SQLite ファイルを作り、statements（CREATE・INSERT）を順に実行する汎用の入口。作れたら true。
+## ログインボーナスのように「テーブルごとに別のファイル」「列の有無を変えた版」を作るテストが使う。
+static func create_db(path: String, statements: Array) -> bool:
+	if not ClassDB.class_exists("SQLite"):
+		return false
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var database: Object = ClassDB.instantiate("SQLite")
+	database.path = path
+	if not database.open_db():
+		return false
+	for statement: String in statements:
+		if not database.query(statement):
+			database.close_db()
+			return false
+	database.close_db()
+	return true

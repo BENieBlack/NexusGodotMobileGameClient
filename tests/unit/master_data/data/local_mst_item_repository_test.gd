@@ -81,6 +81,59 @@ func test_returns_null_when_table_is_not_delivered_or_no_database() -> void:
 	)
 
 
+## 前提: is_wallet の列がある mst_item（0/1 の整数・NULL）。期待: 0 以外は真、0・NULL は偽の真偽値になる。
+func test_is_wallet_is_converted_to_bool() -> void:
+	var items := WORK_DIR + "wallet_item.db"
+	(
+		assert_bool(
+			(
+				SqliteTestHelper
+				. create_db(
+					items,
+					[
+						(
+							"CREATE TABLE mst_item (deploy_key INTEGER, id TEXT PRIMARY KEY, type TEXT, "
+							+ "is_wallet INTEGER)"
+						),
+						"INSERT INTO mst_item VALUES (1, 'gold', 'currency', 1)",
+						"INSERT INTO mst_item VALUES (1, 'potion', 'recovery', 0)",
+						"INSERT INTO mst_item VALUES (1, 'nullable', 'recovery', NULL)",
+						(
+							"CREATE TABLE mst_item__l10n (deploy_key INTEGER, mst_item_id TEXT, "
+							+ "language TEXT, name TEXT)"
+						),
+					]
+				)
+			)
+		)
+		. is_true()
+	)
+	_open_downloaded_with(items)
+	var repository := LocalMstItemRepository.new(_database, "ja")
+	assert_bool(repository.get_by_id("gold").is_wallet).is_true()
+	assert_bool(repository.get_by_id("potion").is_wallet).is_false()
+	assert_bool(repository.get_by_id("nullable").is_wallet).is_false()
+	# 既存の列も読める（SELECT * にしても壊れない）
+	assert_str(repository.get_by_id("gold").type).is_equal("currency")
+
+
+## 前提: is_wallet の列が無い古い配信ファイルの mst_item（既存の create_item_master_db）。
+## 期待: get_by_id が行を引け（全件が引けなくなる退行を防ぐ）、is_wallet は偽。
+func test_old_delivery_without_is_wallet_column_is_still_readable() -> void:
+	_open_with_items()
+	var item := LocalMstItemRepository.new(_database, "ja").get_by_id("free_diamond")
+	assert_object(item).is_not_null()
+	assert_str(item.name).is_equal("無償ダイヤ")
+	assert_bool(item.is_wallet).is_false()
+
+
+func _open_downloaded_with(items: String) -> void:
+	var base := WORK_DIR + "base2.db"
+	assert_bool(SqliteTestHelper.create_master_db(base)).is_true()
+	var files := {"mst_gacha": base, "mst_unit": base, "mst_equipment": base, "mst_item": items}
+	assert_bool(_database.open_downloaded(files)).is_true()
+
+
 func _remove_dir(path: String) -> void:
 	var dir := DirAccess.open(path)
 	if dir == null:

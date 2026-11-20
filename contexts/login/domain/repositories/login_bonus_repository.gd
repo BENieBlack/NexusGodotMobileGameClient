@@ -17,6 +17,17 @@ func list() -> Array[LoginBonus]:
 	return []
 
 
-## 保持を空にする（セッション破棄のとき）。
+## 保持を空にする（セッション破棄のとき。受取結果と段の進捗の両方）。
 func clear() -> void:
 	push_error("未実装: LoginBonusRepository.clear")
+
+
+## 通常・VIP の段の進捗で置き換える（login 応答・list 応答・再受け取りの応答のあと。全量）。
+func replace_calendars(_calendars: LoginBonusCalendars) -> void:
+	push_error("未実装: LoginBonusRepository.replace_calendars")
+
+
+## 保持している段の進捗。ログイン前・破棄後・旧サーバー（新キー無し）は、両方 null の束（null にしない）。
+func calendars() -> LoginBonusCalendars:
+	push_error("未実装: LoginBonusRepository.calendars")
+	return LoginBonusCalendars.new()

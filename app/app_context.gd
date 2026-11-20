@@ -42,6 +42,8 @@ var _mst_gacha_repository: MstGachaRepository
 var _mst_player_level_repository: MstPlayerLevelRepository
 var _mst_config_repository: MstConfigRepository
 var _mst_item_repository: MstItemRepository
+var _mst_login_bonus_repository: MstLoginBonusRepository
+var _mst_vip_login_bonus_repository: MstVipLoginBonusRepository
 
 # --- core ---
 var _clock: SystemClock
@@ -58,12 +60,17 @@ var _apply_login_data_use_case: ApplyLoginDataUseCase
 var _get_player_id_use_case: GetPlayerIdUseCase
 var _get_home_summary_use_case: GetHomeSummaryUseCase
 var _get_stamina_display_use_case: GetStaminaDisplayUseCase
+var _apply_updated_resources_use_case: ApplyUpdatedResourcesUseCase
 
 # --- login ---
 var _login_bonus_repository: LoginBonusRepository
 var _login_use_case: LoginUseCase
 var _get_login_bonuses_use_case: GetLoginBonusesUseCase
 var _get_login_bonus_displays_use_case: GetLoginBonusDisplaysUseCase
+var _prepare_login_bonus_master_use_case: PrepareLoginBonusMasterUseCase
+var _fetch_login_bonus_calendars_use_case: FetchLoginBonusCalendarsUseCase
+var _receive_vip_login_bonus_use_case: ReceiveVipLoginBonusUseCase
+var _get_login_bonus_screen_use_case: GetLoginBonusScreenUseCase
 
 # --- agreement ---
 var _fetch_pending_agreements_use_case: FetchPendingAgreementsUseCase
@@ -145,6 +152,31 @@ func get_login_bonus_displays_use_case() -> GetLoginBonusDisplaysUseCase:
 
 func login_use_case() -> LoginUseCase:
 	return _login_use_case
+
+
+## 画面を出す前に、段の ID をマスターから引く（引けなければ 1 回だけマスターを取り直す。2-4）。
+func prepare_login_bonus_master_use_case() -> PrepareLoginBonusMasterUseCase:
+	return _prepare_login_bonus_master_use_case
+
+
+## POST /login_bonus/list で段の進捗を取り直す（ホームから開くとき・再受け取りの業務エラーの後）。
+func fetch_login_bonus_calendars_use_case() -> FetchLoginBonusCalendarsUseCase:
+	return _fetch_login_bonus_calendars_use_case
+
+
+## POST /login_bonus/receive（VIP の再受け取り）。
+func receive_vip_login_bonus_use_case() -> ReceiveVipLoginBonusUseCase:
+	return _receive_vip_login_bonus_use_case
+
+
+## ログインボーナス画面の表示モデル（LoginBonusScreen）を作る。
+func get_login_bonus_screen_use_case() -> GetLoginBonusScreenUseCase:
+	return _get_login_bonus_screen_use_case
+
+
+## updated_resources をホームの所持数の保持へ取り込む（player の公開 UseCase）。
+func apply_updated_resources_use_case() -> ApplyUpdatedResourcesUseCase:
+	return _apply_updated_resources_use_case
 
 
 func fetch_pending_agreements_use_case() -> FetchPendingAgreementsUseCase:
@@ -245,6 +277,9 @@ func _build() -> void:
 	_mst_config_repository = LocalMstConfigRepository.new(_master_database)
 	# 名前の言語は API の Accept-Language と同じ 1 か所の値（ApiConfig.language()）
 	_mst_item_repository = LocalMstItemRepository.new(_master_database, ApiConfig.language())
+	# ログインボーナスのマスターは、テーブルごとに別の SQLite（配信があるときだけ入る任意テーブル）
+	_mst_login_bonus_repository = LocalMstLoginBonusRepository.new(_master_database)
+	_mst_vip_login_bonus_repository = LocalMstVipLoginBonusRepository.new(_master_database)
 	# auth
 	var auth_repository := AuthApiRepository.new(_api_client, _auth_token_repository)
 	_authenticate_use_case = AuthenticateUseCase.new(auth_repository, _auth_token_repository)
@@ -258,6 +293,7 @@ func _build() -> void:
 		_player_repository, _mst_player_level_repository, _mst_config_repository
 	)
 	_get_stamina_display_use_case = GetStaminaDisplayUseCase.new(_player_repository, _clock)
+	_apply_updated_resources_use_case = ApplyUpdatedResourcesUseCase.new(_player_repository)
 	# login
 	_login_bonus_repository = LocalLoginBonusRepository.new()
 	_login_use_case = LoginUseCase.new(
@@ -268,6 +304,22 @@ func _build() -> void:
 	_get_login_bonuses_use_case = GetLoginBonusesUseCase.new(_login_bonus_repository)
 	_get_login_bonus_displays_use_case = GetLoginBonusDisplaysUseCase.new(
 		_get_login_bonuses_use_case, _mst_item_repository
+	)
+	var calendar_repository := LoginBonusCalendarApiRepository.new(_api_client)
+	_prepare_login_bonus_master_use_case = PrepareLoginBonusMasterUseCase.new(
+		LoginBonusStageMasterReader.new(
+			_mst_login_bonus_repository, _mst_vip_login_bonus_repository
+		),
+		_check_master_data_use_case
+	)
+	_fetch_login_bonus_calendars_use_case = FetchLoginBonusCalendarsUseCase.new(
+		calendar_repository, _login_bonus_repository
+	)
+	_receive_vip_login_bonus_use_case = ReceiveVipLoginBonusUseCase.new(
+		calendar_repository, _login_bonus_repository, _apply_updated_resources_use_case
+	)
+	_get_login_bonus_screen_use_case = GetLoginBonusScreenUseCase.new(
+		_login_bonus_repository, _get_login_bonus_displays_use_case
 	)
 	# agreement
 	var agreement_repository := AgreementApiRepository.new(_api_client)
