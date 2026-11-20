@@ -10,6 +10,7 @@
 ##      表示値は毎回「その時点の now」から求めるので、タイマーが遅れても積み上がらない
 ##   3. 残り時間が無い（最大値・計算不能・行なし）ときはタイマーを止める。状態が変われば（復帰・マスター更新）再開する
 ##   4. ホームを離れるとき（_exit_tree）はタイマーを止め、シグナルを切る
+## 値の横のアイコン: スタミナ・コイン・ダイヤの値ラベルの左に ItemIcon（48）を置く（ItemIcon は core/presentation の共通部品）。
 ## 導線ボタン（メール・お知らせ）は枠だけで、押しても何も起きない（pressed を接続しない。P3）。
 ## セーフエリア: 端末のセーフエリアを SafeAreaMargins でビューポート座標へ直し、Margin の余白に足す。
 ## 依存: UseCase 2 つ（テストは setup で渡す）。
@@ -19,6 +20,9 @@ extends Control
 ## Margin の基本の余白（ビューポート座標）。セーフエリアの分をこれに足す
 const BASE_MARGIN_SIDE := 48
 const BASE_MARGIN_VERTICAL := 96
+
+## 値の横のアイコンの一辺（ビューポート単位。要件 I10 のホームの大きさ）
+const ICON_SIZE := 48
 
 var _get_home_summary: GetHomeSummaryUseCase
 var _get_stamina_display: GetStaminaDisplayUseCase
@@ -30,10 +34,15 @@ var _summary: HomeSummary = HomeSummary.new()
 @onready var _name_label: Label = $Margin/Root/PlayerPanel/VBox/NameLabel
 @onready var _id_label: Label = $Margin/Root/PlayerPanel/VBox/Row/IdLabel
 @onready var _level_label: Label = $Margin/Root/PlayerPanel/VBox/Row/LevelLabel
-@onready var _stamina_value_label: Label = $Margin/Root/StaminaPanel/VBox/StaminaValueLabel
+@onready var _stamina_value_label: Label = $Margin/Root/StaminaPanel/VBox/ValueRow/StaminaValueLabel
 @onready var _stamina_remain_label: Label = $Margin/Root/StaminaPanel/VBox/StaminaRemainLabel
-@onready var _coin_label: Label = $Margin/Root/CurrencyRow/CoinPanel/VBox/CoinValueLabel
-@onready var _diamond_label: Label = $Margin/Root/CurrencyRow/DiamondPanel/VBox/DiamondValueLabel
+@onready var _coin_label: Label = $Margin/Root/CurrencyRow/CoinPanel/VBox/ValueRow/CoinValueLabel
+@onready
+var _diamond_label: Label = $Margin/Root/CurrencyRow/DiamondPanel/VBox/ValueRow/DiamondValueLabel
+@onready var _stamina_icon: ItemIcon = $Margin/Root/StaminaPanel/VBox/ValueRow/StaminaIcon
+@onready var _coin_icon: ItemIcon = $Margin/Root/CurrencyRow/CoinPanel/VBox/ValueRow/CoinIcon
+@onready
+var _diamond_icon: ItemIcon = $Margin/Root/CurrencyRow/DiamondPanel/VBox/ValueRow/DiamondIcon
 @onready var _timer: Timer = $StaminaTimer
 
 
@@ -63,6 +72,7 @@ func _ready() -> void:
 	if not _master_data_loaded.is_null():
 		_master_data_loaded.connect(_on_master_data_loaded)
 	_apply_safe_area()
+	_setup_icons()
 	reload()
 
 
@@ -94,6 +104,15 @@ func reload() -> void:
 	_coin_label.text = HomeText.coin_text(_summary)
 	_diamond_label.text = HomeText.diamond_text(_summary)
 	refresh_stamina()
+
+
+## 値の横のアイコン 3 つを出す（client_design.md 5-5）。ホームは master_data を使わず固定の ID で引く
+## （絵は同梱の items/ に必ず在るので mst_item_type は渡さない）。無償ダイヤは「合計」を指すが、
+## 合計用の絵は作らず free_diamond の絵を使う（D-1）。絵は値が変わっても変わらないので、開くとき 1 回だけ設定する。
+func _setup_icons() -> void:
+	_stamina_icon.setup("item", PlayerResourceIds.STAMINA_ICON_ITEM_ID, "", ICON_SIZE)
+	_coin_icon.setup("item", PlayerResourceIds.COIN, "", ICON_SIZE)
+	_diamond_icon.setup("item", PlayerResourceIds.FREE_DIAMOND, "", ICON_SIZE)
 
 
 ## スタミナのラベルだけ更新する。残り時間が無ければタイマーを止め、あれば（止まっていれば）再開する。

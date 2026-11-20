@@ -8,10 +8,10 @@ const LAST_AT := "2027-01-15 08:00:00"
 const NAME := "Margin/Root/PlayerPanel/VBox/NameLabel"
 const ID := "Margin/Root/PlayerPanel/VBox/Row/IdLabel"
 const LEVEL := "Margin/Root/PlayerPanel/VBox/Row/LevelLabel"
-const STAMINA := "Margin/Root/StaminaPanel/VBox/StaminaValueLabel"
+const STAMINA := "Margin/Root/StaminaPanel/VBox/ValueRow/StaminaValueLabel"
 const REMAIN := "Margin/Root/StaminaPanel/VBox/StaminaRemainLabel"
-const COIN := "Margin/Root/CurrencyRow/CoinPanel/VBox/CoinValueLabel"
-const DIAMOND := "Margin/Root/CurrencyRow/DiamondPanel/VBox/DiamondValueLabel"
+const COIN := "Margin/Root/CurrencyRow/CoinPanel/VBox/ValueRow/CoinValueLabel"
+const DIAMOND := "Margin/Root/CurrencyRow/DiamondPanel/VBox/ValueRow/DiamondValueLabel"
 
 var _clock: FakeMstRepositories.FixedClock
 var _levels: FakeMstRepositories.Level
@@ -264,3 +264,81 @@ func test_layout_fits_in_viewport() -> void:
 		assert_float(rects[paths[0]].end.x).is_equal_approx(size.x - 48.0, 0.5)
 		assert_float(rects[paths[4]].size.y).is_greater_equal(160.0)
 		viewport.queue_free()
+
+
+## 前提: ログイン済みのホーム。期待: スタミナ・コイン・ダイヤの値の横に ItemIcon が 1 つずつ在り、固定の ID の絵が入って
+## 大きさは 48（client_design.md 5-5。無償ダイヤは合計用の絵を作らず free_diamond）。値の文字は従来のまま。
+func test_value_icons_are_shown_with_fixed_ids() -> void:
+	var lists := _stamina(50)
+	lists["trx_wallet_list"] = [{"mst_item_id": "coin", "free_amount": 1000}]
+	_login({"my_id": "a", "level": 1}, lists)
+	var screen := await _show_home()
+	var expected := {
+		"Margin/Root/StaminaPanel/VBox/ValueRow/StaminaIcon": "items/stamina_50",
+		"Margin/Root/CurrencyRow/CoinPanel/VBox/ValueRow/CoinIcon": "items/coin",
+		"Margin/Root/CurrencyRow/DiamondPanel/VBox/ValueRow/DiamondIcon": "items/free_diamond",
+	}
+	for path: String in expected:
+		var icon := screen.get_node(path) as ItemIcon
+		assert_object(icon).is_not_null()
+		assert_str(icon.resolved_key).is_equal(expected[path])
+		assert_vector(icon.custom_minimum_size).is_equal(Vector2(48, 48))
+	assert_str(_text(screen, COIN)).is_equal("1,000")
+
+
+## 前提: 未ログインのホーム。期待: アイコンは出たまま（絵は値に依らない）で、値は「-」。
+func test_value_icons_shown_when_not_logged_in() -> void:
+	var screen := await _show_home()
+	var icon := (
+		screen.get_node("Margin/Root/CurrencyRow/CoinPanel/VBox/ValueRow/CoinIcon") as ItemIcon
+	)
+	assert_object(icon.texture).is_not_null()
+	assert_str(_text(screen, COIN)).is_equal("-")
+
+
+## 前提: ログイン済みのホーム（コイン 1000・ダイヤ 50・スタミナ 50）。操作: ツリーに入れて描画を 2 フレーム回す
+## （ヘッドレスでもコンテナのレイアウトは計算される）。期待: 3 つの値ラベルが表示中・幅が文字の幅以上・高さも 0 でなく、
+## 文字が期待どおりで、同じ行の ItemIcon の右に並ぶ。
+## なぜ必要か: 値ラベルは text_overrun_behavior=trim（最小幅 0）で、ValueRow（HBox）の中で横に広げる指定が無いと
+## 幅 1 に潰れ、文字が消えていた（値は取れているのに画面に出ない）。テキストの一致だけでは検出できなかった。
+func test_value_labels_have_nonzero_size_beside_icons() -> void:
+	var lists := _stamina(50)
+	lists["trx_wallet_list"] = [{"mst_item_id": "coin", "free_amount": 1000}]
+	lists["trx_item_list"] = [{"mst_item_id": "free_diamond", "free_amount": 50}]
+	_login({"my_id": "a", "level": 1}, lists)
+	var screen := await _show_home()
+	# 親が Control でないテストでは画面の大きさが 0 のままなので、実機と同じ 1080x1920 にして並べ直す
+	screen.size = Vector2(1080, 1920)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var pairs := {
+		STAMINA: ["Margin/Root/StaminaPanel/VBox/ValueRow/StaminaIcon", "50 / 50"],
+		COIN: ["Margin/Root/CurrencyRow/CoinPanel/VBox/ValueRow/CoinIcon", "1,000"],
+		DIAMOND: ["Margin/Root/CurrencyRow/DiamondPanel/VBox/ValueRow/DiamondIcon", "50"],
+	}
+	for label_path: String in pairs:
+		var label := screen.get_node(label_path) as Label
+		var icon := screen.get_node(pairs[label_path][0]) as ItemIcon
+		assert_bool(label.is_visible_in_tree()).is_true()
+		# 幅は文字が収まる大きさ（trim の最小幅は 1 で、0 より大きいだけでは「消えている」を見逃す）
+		var text_width := (
+			label
+			. get_theme_font("font")
+			. get_string_size(
+				label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, label.get_theme_font_size("font_size")
+			)
+			. x
+		)
+		assert_float(label.size.x).is_greater_equal(text_width)
+		assert_float(label.size.y).is_greater(0.0)
+		assert_str(label.text).is_equal(pairs[label_path][1])
+		# 同じ行: 縦の範囲が重なり、ラベルはアイコンの右にある
+		var label_rect := label.get_global_rect()
+		var icon_rect := icon.get_global_rect()
+		assert_float(label_rect.position.x).is_greater_equal(icon_rect.end.x - 0.5)
+		(
+			assert_bool(
+				label_rect.position.y < icon_rect.end.y and icon_rect.position.y < label_rect.end.y
+			)
+			. is_true()
+		)

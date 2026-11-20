@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<defs><linearGradient id="g_stone" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#D5DAF5"/><stop offset="1" stop-color="#9AA3CF"/></linearGradient><linearGradient id="g_cream" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#FFF3CF"/></linearGradient></defs>
+<ellipse cx="64" cy="114" rx="30.6" ry="4" fill="#0B0B2A" fill-opacity="0.28"/>
+<path d="M64 22 L91 45.4 L91 88.6 L64 112 L37 88.6 L37 45.4 Z" fill="url(#g_stone)"/>
+<path d="M64 22 L37 45.4 L37 88.6 L64 112 Z" fill="#FFFFFF" fill-opacity="0.28"/>
+<path d="M64 63.04 L69.04 76 L82.72 77.44 L69.04 83.2 L64 97.6 L58.96 83.2 L45.28 77.44 L58.96 76 Z" fill="url(#g_cream)"/>
+</svg>

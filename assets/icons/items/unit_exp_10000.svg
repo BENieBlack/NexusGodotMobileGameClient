@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<defs><linearGradient id="g_violet" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#CDB0FF"/><stop offset="1" stop-color="#A06BFF"/></linearGradient><linearGradient id="g_navy" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5A5CB0"/><stop offset="1" stop-color="#3A3C84"/></linearGradient><linearGradient id="g_cream" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#FFF3CF"/></linearGradient><linearGradient id="g_gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE08A"/><stop offset="1" stop-color="#FFC245"/></linearGradient></defs>
+<ellipse cx="64" cy="114" rx="34" ry="4" fill="#0B0B2A" fill-opacity="0.28"/>
+<rect x="26" y="12" width="76" height="100" rx="14" fill="url(#g_violet)"/>
+<rect x="36" y="22" width="56" height="80" rx="8" fill="url(#g_navy)" fill-opacity="0.35"/>
+<path d="M64 34 L84 54 L76 62 L64 50 L52 62 L44 54 Z" fill="url(#g_cream)"/>
+<path d="M64 56 L84 76 L76 84 L64 72 L52 84 L44 76 Z" fill="url(#g_cream)"/>
+<circle cx="51" cy="92" r="4.5" fill="url(#g_gold)"/>
+<circle cx="64" cy="92" r="4.5" fill="url(#g_gold)"/>
+<circle cx="77" cy="92" r="4.5" fill="url(#g_gold)"/>
+</svg>

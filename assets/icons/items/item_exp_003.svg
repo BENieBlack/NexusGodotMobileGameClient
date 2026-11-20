@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<defs><linearGradient id="g_mint" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#B5F5DC"/><stop offset="1" stop-color="#5EE0B0"/></linearGradient><linearGradient id="g_cream" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#FFF3CF"/></linearGradient><linearGradient id="g_gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE08A"/><stop offset="1" stop-color="#FFC245"/></linearGradient></defs>
+<ellipse cx="64" cy="114" rx="34" ry="4" fill="#0B0B2A" fill-opacity="0.28"/>
+<path d="M64 12 L94 38 L94 86 L64 112 L34 86 L34 38 Z" fill="url(#g_mint)"/>
+<path d="M64 12 L34 38 L34 86 L64 112 Z" fill="#FFFFFF" fill-opacity="0.28"/>
+<path d="M64 57.6 L69.6 72 L84.8 73.6 L69.6 80 L64 96 L58.4 80 L43.2 73.6 L58.4 72 Z" fill="url(#g_cream)"/>
+<circle cx="104" cy="24" r="5" fill="url(#g_gold)"/>
+<circle cx="104" cy="38" r="5" fill="url(#g_gold)"/>
+<circle cx="104" cy="52" r="5" fill="url(#g_gold)"/>
+</svg>

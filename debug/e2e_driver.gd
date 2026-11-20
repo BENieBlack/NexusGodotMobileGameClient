@@ -31,6 +31,10 @@
 ##   --e2e-clock-skew=<秒>  端末時計のずれ（AppContext.debug_clock().skew_seconds）。正なら端末が進んでいる
 ##                          （サーバー時刻のオフセット補正の確認）
 ##   --e2e-omit-platform    X-Platform を付けない状態にする（api_client().set_platform("")。99003 の表示の確認）
+##   --e2e-frame-probe=<秒> ログインボーナス画面とホームが出てから指定秒のあいだ、描画の指標（処理時間・ドロー呼び出し・
+##                          オブジェクト数・ノード数）を毎フレーム集めて `E2E_PROBE:` の行に平均・最大を出す（FrameProbe。
+##                          client_design.md 7 節）。記録中は画面の操作（クリック・終了）を待つ。ヘッドレスでは描画統計が
+##                          取れないので、行に `render=unavailable(headless)` が付く。--write-movie とは併用しない
 ##   --e2e-timeout=<秒>     この秒数で打ち切る（既定 120。コード 1）
 ## クリックの送り方: 実際のマウス操作に近づけ、移動 → 押下 → 数フレーム → 解放の順に送る（動画で押下の
 ##   見た目が出る）。座標はビューポート座標で指定し、ウィンドウ座標へ変換して送る（下の make_* と
@@ -70,6 +74,8 @@ const TERMS_SCROLL_STEPS := 4
 const TERMS_SCROLL_INTERVAL := 0.6
 const TERMS_SCROLL_RATIO := 0.6
 
+const FrameProbe := preload("res://debug/frame_probe.gd")
+
 ## 引数の辞書（キーは "e2e-reset" のように先頭の -- を除いた名前。値の無いものは true）
 var _args: Dictionary = {}
 var _fail_kind: String = ""
@@ -97,6 +103,9 @@ var _tokens_corrupted: bool = false
 var _terms_phase: TermsPhase = TermsPhase.OPEN
 var _terms_time: float = 0.0
 var _terms_scrolls: int = 0
+## 描画の指標の記録（--e2e-frame-probe）。画面が変わるたびに作り直す。記録済みの画面は _probed_scenes に入れて 1 回だけにする
+var _probe: RefCounted = null
+var _probed_scenes: Dictionary = {}
 ## ホームで止まる追加の秒数（--e2e-home-hold）
 var _home_hold: float = 0.0
 ## ホームに入った最初の値（login_stamina・open_stamina の出力用）。入るまでは null
@@ -162,6 +171,10 @@ func _process(delta: float) -> void:
 	_scene_time += delta
 	_error_delta = delta
 
+	# --- 描画の指標の記録（--e2e-frame-probe）。記録中は画面の操作を止める（記録の窓の途中で画面が変わらないように） ---
+	if not _run_probe(delta):
+		return
+
 	match _scene_path:
 		SceneRouter.TITLE_SCENE:
 			_drive_title(scene)
@@ -178,6 +191,47 @@ func _process(delta: float) -> void:
 			if _scene_time > HOME_QUIT_DELAY + _dwell + _home_hold:
 				print(_home_result_line())
 				_quit(0)
+
+
+# --- 描画の指標（--e2e-frame-probe） ---
+
+
+## 記録の秒数（--e2e-frame-probe=<秒>）。無い・数値でない・0 以下は 0（記録しない）。
+static func frame_probe_seconds(args: Dictionary) -> float:
+	var value: Variant = args.get("e2e-frame-probe", null)
+	if value is String and value.is_valid_float():
+		return maxf(0.0, value.to_float())
+	return 0.0
+
+
+## ログインボーナス画面とホームで、画面が出てから指定秒のあいだ指標を集める。
+## 戻り値: 記録中なら false（呼び出し側は画面の操作をしない）、記録しない・済んだなら true。
+## 流れ: 画面が出た最初のフレームで FrameProbe を作る → 毎フレーム advance → 指定秒に達したら 1 行出して済みにする。
+## 画面ごとに 1 回だけ（_probed_scenes）。ホームはタイマーが動き続けるので、窓の外の値は見ない。
+func _run_probe(delta: float) -> bool:
+	var seconds := frame_probe_seconds(_args)
+	if seconds <= 0.0 or _probed_scenes.has(_scene_path):
+		return true
+	if _scene_path != SceneRouter.LOGIN_BONUS_SCENE and _scene_path != SceneRouter.HOME_SCENE:
+		return true
+	if _probe == null:
+		_probe = FrameProbe.new(seconds)
+	if not _probe.advance(delta):
+		return false
+	var summary: Dictionary = _probe.result()
+	print(
+		FrameProbe.format_line(
+			_scene_path.get_file().get_basename(),
+			_probe.frames(),
+			summary,
+			FrameProbe.is_headless()
+		)
+	)
+	_probed_scenes[_scene_path] = true
+	_probe = null
+	# 記録の間に進んだ画面の時間は、操作の待ち（ACTION_DELAY など）に数えず 0 から数え直す
+	_scene_time = 0.0
+	return true
 
 
 # --- ホームの値 ---

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<defs><linearGradient id="g_wood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E0B38A"/><stop offset="1" stop-color="#BE8657"/></linearGradient></defs>
+<ellipse cx="64" cy="114" rx="44" ry="4" fill="#0B0B2A" fill-opacity="0.28"/>
+<rect x="12" y="78" width="64" height="30" rx="15" fill="url(#g_wood)"/>
+<circle cx="27" cy="93" r="15" fill="#E0B38A"/>
+<circle cx="27" cy="93" r="7" fill="url(#g_wood)"/>
+<rect x="52" y="78" width="64" height="30" rx="15" fill="url(#g_wood)"/>
+<circle cx="67" cy="93" r="15" fill="#E0B38A"/>
+<circle cx="67" cy="93" r="7" fill="url(#g_wood)"/>
+<rect x="32" y="46" width="64" height="30" rx="15" fill="url(#g_wood)"/>
+<circle cx="47" cy="61" r="15" fill="#E0B38A"/>
+<circle cx="47" cy="61" r="7" fill="url(#g_wood)"/>
+</svg>

@@ -25,6 +25,7 @@
 | 初回の準備（GdUnit4 と lint 用の Python 環境） | `make setup-tools`（GdUnit4 は git に入れず、`tools/install_gdunit4.sh` が版と SHA を固定して `addons/gdUnit4/` に入れる） |
 | テスト（GdUnit4、ヘッドレス） | `make test`（結果だけ: `make test-quiet`）。結果の XML は `reports/` |
 | lint / 整形 | `make lint` / `make format-check` / `make format`（新構成のディレクトリだけ） |
+| アイコン（自作の SVG）の生成・検査 | `make icons`（`assets/icons/` と `core/presentation/item_icon/item_icon_table.gd` を生成。手順は [docs/ASSETS.md](docs/ASSETS.md)）/ `make check-icons`（規格と生成との一致。`make check` に含む） |
 | 製品ビルド用の複製（debug/・tests/・gdUnit4 と E2EDriver の autoload を除く） | `make release-project`（出力: `build/release-project`）。複製の起動検査は `make check-release`（結果だけ: `make check-release-quiet`。`make check` に含む） |
 | 一部だけ | `GODOT_BIN=godot` を付けて `godot --headless --path . -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd --add res://tests/unit/xxx_test.gd --ignoreHeadlessMode` |
 

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<defs><linearGradient id="g_sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#A8E4FF"/><stop offset="1" stop-color="#5CC4FF"/></linearGradient><linearGradient id="g_cream" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#FFF3CF"/></linearGradient></defs>
+<ellipse cx="64" cy="114" rx="34" ry="4" fill="#0B0B2A" fill-opacity="0.28"/>
+<path d="M36 34 L92 34 L108 54 L64 112 L20 54 Z" fill="url(#g_sky)"/>
+<path d="M36 34 L92 34 L108 54 L20 54 Z" fill="#FFFFFF" fill-opacity="0.3"/>
+<path d="M20 54 L64 112 L64 54 Z" fill="#2E8FD6" fill-opacity="0.28"/>
+<path d="M48 38 L66 38 L56 50 Z" fill="#FFFFFF" fill-opacity="0.55"/>
+<path d="M104 14 L108 22 L116 26 L108 30 L104 38 L100 30 L92 26 L100 22 Z" fill="url(#g_cream)"/>
+</svg>

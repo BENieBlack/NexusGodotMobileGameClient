@@ -198,7 +198,7 @@ LoginBonus (Control, login_bonus_presenter.gd)         … 入口 entry を @exp
 
 - presenter（presentation）は UseCase と `core/presentation` の部品（`ItemIcon`・`ErrorView`・`SafeAreaMargins`・`NumberText`）だけを使う。data（`*_response.gd`・Repository 実装）は参照しない（P1）。ホームは `login` の UseCase を使わない（遷移だけ）
 - `login` → `player` は `ApplyUpdatedResourcesUseCase`（公開 UseCase）だけ（X1・P2）。`login` → `master_data` は `domain` の Repository の契約・`CheckMasterDataUseCase`・エンティティだけ（`data` は参照しない。architecture.md）
-- `core/domain/item_icon_resolver.gd` は `Node`/`Texture2D` に依存しない（D2）。`core/presentation/item_icon_table.gd` がアセットを `preload` する（C1: core は contexts・master_data を参照しない。引けた `mst_item.type` は呼び出し側が渡す）
+- `core/domain/item_icon_resolver.gd` は `Node`/`Texture2D` に依存しない（D2）。`core/presentation/item_icon/item_icon_table.gd` がアセットを `preload` する（C1: core は contexts・master_data を参照しない。引けた `mst_item.type` は呼び出し側が渡す）
 - `debug/` の確認用画面は本番コードから参照されない（T1）。製品の複製から除外される
 
 ### 2-4. マスターが古くて ID を引けないとき（人の決定の宿題。既定案）
