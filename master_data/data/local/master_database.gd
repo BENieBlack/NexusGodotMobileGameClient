@@ -9,7 +9,8 @@
 ##   - open_bundled(path)  : 同梱 DB を開く（起動時の既定。更新 DB が使えないときの戻り先でもある）
 ##   - open_downloaded(map): 更新 DB（テーブル名 → ファイルのパス）を開く。必須テーブルが揃わなければ
 ##                           何も変えずに false を返す（旧 DB を維持）
-##   - select_rows(table, sql, bindings): そのテーブルの DB に問い合わせる
+##   - select_rows(table, sql, bindings): そのテーブルの DB に問い合わせる（失敗は空配列）
+##   - try_select_rows(table, sql, bindings): 同じ問い合わせで、失敗と 0 件を区別して返す
 ## 失敗の扱い: 開けなければ false。問い合わせは DB が無い・エラーなら空配列。例外にしない。
 ## Godot の落とし穴: SQLite は GDExtension のクラスで、プラグインが無効な環境では存在しない。
 ##   ClassDB.class_exists("SQLite") で確かめてから使う。
@@ -95,6 +96,20 @@ func select_rows(table_name: String, sql: String, bindings: Array = []) -> Array
 	if not database.query_with_bindings(sql, bindings):
 		return []
 	return database.query_result
+
+
+## select_rows と同じ問い合わせを、失敗と 0 件を区別して返す（MasterRowsResult）。
+## DB が開けていない・クエリが失敗（列なし・テーブルなし）なら ok = false、成功なら ok = true と行
+## （0 件も成功）。既存の select_rows は変えない（失敗を空配列にする今の契約に他が依存している）。
+## 使い道: 古い配信ファイルで新しい列（sort_desc など）が無いとき、空配列ではなく「読めない」と分かる。
+func try_select_rows(table_name: String, sql: String, bindings: Array = []) -> MasterRowsResult:
+	var database: Object = _databases.get(table_name, null)
+	if database == null:
+		return MasterRowsResult.new(false)
+	if not database.query_with_bindings(sql, bindings):
+		return MasterRowsResult.new(false)
+	# query_result は次の問い合わせで書き換わりうるので、複製して渡す
+	return MasterRowsResult.new(true, (database.query_result as Array).duplicate())
 
 
 ## すべての接続を閉じる。アプリ終了時と、DB の切り替えのときに呼ぶ。

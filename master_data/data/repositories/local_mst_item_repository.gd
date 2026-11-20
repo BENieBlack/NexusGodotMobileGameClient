@@ -8,11 +8,11 @@
 ## mst_item__l10n は mst_item と同じ SQLite ファイルに入る（配信の仕組み）ので、
 ## select_rows には親テーブル名（mst_item）をキーとして渡して両方に届かせる。
 ## 言語の連鎖（ja が無ければ en など）は作らない。無ければ使う側のフォールバックに任せる。キャッシュは持たない。
+## is_wallet（wallet 系のアイテムか）は列があるときだけ読む（無い版の配信ファイルでも引ける。偽になる）。
 class_name LocalMstItemRepository
 extends MstItemRepository
 
 const TABLE := "mst_item"
-const COLUMNS := "deploy_key, id, type"
 
 var _database: MasterDatabase
 ## l10n の language 列と照合する値（ApiConfig.language() を AppContext が渡す）
@@ -26,7 +26,9 @@ func _init(database: MasterDatabase, language: String) -> void:
 
 func get_by_id(id: String) -> MstItem:
 	# --- 1. mst_item の行 ---
-	var sql := "SELECT %s FROM %s WHERE id = ? LIMIT 1" % [COLUMNS, TABLE]
+	# SELECT * にする理由: is_wallet の列が無い古い配信ファイルでも、列を明示すると「no such column」で
+	# 全件が引けなくなる。列があるときだけ読み、無ければ既定値（偽）にする
+	var sql := "SELECT * FROM %s WHERE id = ? LIMIT 1" % TABLE
 	var rows := _database.select_rows(TABLE, sql, [id])
 	if rows.is_empty():
 		return null
@@ -49,4 +51,6 @@ func _row_to_model(row: Dictionary) -> MstItem:
 	model.id = "" if raw_id == null else str(raw_id)
 	var raw_type: Variant = row.get("type", null)
 	model.type = "" if raw_type == null else str(raw_type)
+	# is_wallet は SQLite では 0/1 の整数。列が無い・NULL は偽
+	model.is_wallet = MstRowReader.get_bool(row, "is_wallet")
 	return model

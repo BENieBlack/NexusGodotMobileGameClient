@@ -131,3 +131,30 @@ func test_to_domain_carries_trx_diamond_without_server_time() -> void:
 	assert_int(int(result.trx_diamond["paid_amount"])).is_equal(5)
 	assert_int(result.server_time_offset_seconds).is_equal(0)
 	assert_bool(result.has_server_time).is_false()
+
+
+## 前提: 新キー無しの旧応答（login_bonus_calendar・vip_login_bonus_calendar が無い）。
+## 期待: login_bonus_calendars が空（両方 null）、login_bonus_list は従来どおり。
+func test_old_response_without_calendar_keys_has_empty_calendars() -> void:
+	var result := LoginResponse.from_dict(_full_body()).to_domain()
+	assert_bool(result.login_bonus_calendars.has_any()).is_false()
+	assert_int(result.login_bonuses.size()).is_equal(1)
+	assert_int(result.login_bonuses[0].amount).is_equal(5000)
+
+
+## 前提: 新キーがある応答（通常は有効、VIP は null）。期待: 段の進捗が載り、既存の項目は変わらない。
+func test_calendar_keys_are_imported_and_existing_fields_unchanged() -> void:
+	var body := _full_body()
+	body["login_bonus_calendar"] = {
+		"mst_login_bonus_id": "lb1",
+		"last_received_day": 2,
+		"is_granted_today": true,
+		"is_granted_now": true,
+	}
+	body["vip_login_bonus_calendar"] = null
+	var result := LoginResponse.from_dict(body).to_domain()
+	assert_str(result.login_bonus_calendars.normal.mst_id).is_equal("lb1")
+	assert_int(result.login_bonus_calendars.normal.last_day).is_equal(2)
+	assert_object(result.login_bonus_calendars.vip).is_null()
+	assert_str(str(result.sys_player["my_id"])).is_equal("abc")
+	assert_int(result.login_bonuses.size()).is_equal(1)

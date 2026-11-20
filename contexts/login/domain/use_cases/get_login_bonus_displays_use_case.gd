@@ -4,11 +4,16 @@
 ##       添えて返す。presenter が Repository を直接触らないための窓口。
 ## 流れ:
 ##   1. 受取の一覧を取る
-##   2. 行ごとに、type が item のときだけ MstItemRepository から名前を引く（unit などは引かない）
+##   2. 行ごとに、unit・equipment・stamina 以外は MstItemRepository を引く（item_type・is_wallet のため）。
+##      名前（item_name）は type が item のときだけ入れる
 ##   3. 名前が引けない（行なし・name が空・Repository が null）は item_name を空にする。例外にしない
+## display_of は 1 件分だけ作る入口（カレンダーのマスの報酬も同じ規則で作る）。
 ## 行数は数件なのでキャッシュは持たない。言語は Repository が持つ（この UseCase は知らない）。
 class_name GetLoginBonusDisplaysUseCase
 extends RefCounted
+
+## mst_item の行ではない type（枠のアイコンの対象外・名前も別の規則。引かない）
+const NON_ITEM_TYPES: Array[String] = ["unit", "equipment", "stamina"]
 
 var _get_login_bonuses: GetLoginBonusesUseCase
 var _mst_item_repository: MstItemRepository
@@ -25,15 +30,24 @@ func _init(
 func handle() -> Array[LoginBonusDisplay]:
 	var displays: Array[LoginBonusDisplay] = []
 	for bonus in _get_login_bonuses.handle():
-		displays.append(LoginBonusDisplay.new(bonus, _lookup_item_name(bonus)))
+		displays.append(display_of(bonus))
 	return displays
 
 
-## type が item の行だけ名前を引く。引けなければ空文字。
-func _lookup_item_name(bonus: LoginBonus) -> String:
-	if bonus.type != LoginBonus.TYPE_ITEM or _mst_item_repository == null:
-		return ""
-	var item := _mst_item_repository.get_by_id(bonus.id)
+## 1 件分の表示用の値を作る。
+func display_of(bonus: LoginBonus) -> LoginBonusDisplay:
+	var item := _lookup_item(bonus)
 	if item == null:
-		return ""
-	return item.name
+		return LoginBonusDisplay.new(bonus)
+	var item_name := item.name if bonus.type == LoginBonus.TYPE_ITEM else ""
+	return LoginBonusDisplay.new(bonus, item_name, item.type, item.is_wallet)
+
+
+## mst_item を引く（item・wallet・その他の未知の type。unit・equipment・stamina は mst_item の行ではないので引かない）。
+## 引けない・ID が空・Repository が null は null。
+func _lookup_item(bonus: LoginBonus) -> MstItem:
+	if _mst_item_repository == null or bonus.id == "":
+		return null
+	if NON_ITEM_TYPES.has(bonus.type):
+		return null
+	return _mst_item_repository.get_by_id(bonus.id)

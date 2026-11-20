@@ -78,3 +78,13 @@
 - master_data: `MstItem` / `MstItemRepository` / `LocalMstItemRepository`（`mst_item` と `mst_item__l10n`。同梱せず `REQUIRED_TABLES` も変えない）
 - 言語: `ApiConfig.language()`（`ja` 固定）、`ApiClient._build_headers()` で全 `request()` に `Accept-Language: ja`（`download()`・Toast には付けない）
 - e2e ドライバーは変更なし
+
+
+## login-bonus-calendar V3a: マスターの読み取り・データ層・ドメイン層（2026-11）
+
+設計: `docs/design/login-bonus-calendar/client_design.md`（2・3・4 節、9 節 V3）。画面は変えない（V3b・V3c）。
+
+- master_data: `MstLoginBonus`・`MstVipLoginBonus` と報酬行、`Local*` Repository（テーブルごとに別の SQLite。`find_by_id` は FOUND / NOT_FOUND / UNREADABLE）、`MasterDatabase.try_select_rows`（失敗と 0 件を区別）、`MstItem.is_wallet`（`SELECT *`。列が無い古い配信ファイルでも引ける）
+- login: 段の進捗 `LoginBonusCalendar(s)`、`LoginBonusStageMasterReader`、`PrepareLoginBonusMasterUseCase`（古いマスターは再取得 1 回。引けない段はその段だけ出さず、出せる段が無いときだけ文字の画面）、`GetLoginBonusScreenUseCase`（表示モデル `LoginBonusScreen`）、`FetchLoginBonusCalendarsUseCase`、`ReceiveVipLoginBonusUseCase`、`LoginBonusCalendarApiRepository`（list は冪等キー無し、receive は有り）
+- player: `ApplyUpdatedResourcesUseCase`
+

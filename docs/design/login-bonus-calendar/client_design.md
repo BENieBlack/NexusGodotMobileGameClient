@@ -108,7 +108,7 @@ LoginBonus (Control, login_bonus_presenter.gd)         … 入口 entry を @exp
 - **再表示の旨**（`NoticeLabel`）: **いずれかの段が今日の段で、どの段も `is_granted_now` が偽**のときだけ「本日のログインボーナスは受け取り済みです」をカレンダーの上に出す（T3・C10・H3・U-3 の既定案）。どの段も今日の段でない日には出さない。`FROM_HOME` の通常（確認のみ）は常にこの条件になる
 - **「今日配られた報酬」の行**（C9）: `FROM_LOGIN` で `login_bonus_list` が非空のときだけ、その全行を（VIP・カムバックを含み、**受け取った順のまま**。D-4）。`FROM_HOME` では出さない。再受け取りの応答を受けたら、その報酬（VIP の段の今日の日の報酬）を行に足す（3-2）
 - **受け取りボタン**（H4）: `ReceiveOffer.visible`（VIP の段の `can_re_receive` が真）のときだけ。押せない状態の印（灰色のボタンなど）は出さない。ラベルは「受け取る」（固定文字）
-- **カレンダーを出さず今の文字の画面に落とす場合**: ① 両方の段が無い（T4・体験 7。VIP も通常も無い）② 旧サーバー（新キー無し。D4）③ いずれかの段の周期の日数（`cycle_days`）が 8 を超える、または 1 未満（C1。**画面全体**を文字にする。段ごとには落とさない）④ **マスターで段の ID を引けない**（古いマスター。再取得しても引けない。2-4）。文字の画面は今の `build_text` をそのまま使う（`login_bonus_list` が空なら「受け取り済み」の文）。②③ のときもカムバックの行は「今日配られた報酬」として文字に出る
+- **カレンダーを出さず今の文字の画面に落とす場合**: ① 両方の段が無い（T4・体験 7。VIP も通常も無い）② 旧サーバー（新キー無し。D4）③ いずれかの段の周期の日数（`cycle_days`）が 8 を超える、または 1 未満（C1。**画面全体**を文字にする。段ごとには落とさない）④ **出せる段が 1 つも無い**（進捗のある段のマスターの ID を、再取得しても全て引けない古いマスター。2-4）。**片方の段だけ引けるときは、引けない段だけ出さず、引けた段だけ表示する**（人の回答 U-11。VIP を引けなければ受け取りボタンも出さない。③ の周期の範囲外とは別の規則）。文字の画面は今の `build_text` をそのまま使う（`login_bonus_list` が空なら「受け取り済み」の文）。②③ のときもカムバックの行は「今日配られた報酬」として文字に出る
 - **「N 日目」「今日」「ログインボーナス」「VIP ボーナス」「＋n」「受け取る」の文字**: クライアントの固定文字（言語は `ja` 固定。overview 7 節 h）。名前はマスに出さない（C3）
 
 ### 1-4. レイアウトと安全領域
@@ -148,7 +148,7 @@ LoginBonus (Control, login_bonus_presenter.gd)         … 入口 entry を @exp
 | domain/use_cases | `fetch_login_bonus_calendars_use_case.gd` | 追加 | `FROM_HOME` の取得。`POST /login_bonus/list`（**冪等キーを付けない**。3-4）。成功したらメモリの保持を置き換え、結果（`FetchLoginBonusCalendarsResult`）を返す。失敗は `Result.failure` 相当 |
 | domain/use_cases | `receive_vip_login_bonus_use_case.gd` ＋ `receive_vip_login_bonus_result.gd` | 追加 | 再受け取り。`POST /login_bonus/receive`。成功なら player の公開 UseCase で所持数を反映（3-3）→ メモリの VIP の段を応答の `vip_login_bonus_calendar` で置き換える（サーバーの値を正とする。`duplicate_as_re_received()` は応答の段が読めないときの代替）→ 受け取った報酬は応答の `login_bonus_list` を結果に載せる |
 | domain/use_cases | `prepare_login_bonus_master_use_case.gd` | 追加 | **非同期**。メモリの進捗の段の ID をマスターで引き（`LoginBonusStageMasterReader`＝`master_data` の 2 つの Repository の窓口）、引けない段があれば `CheckMasterDataUseCase.handle()` を **1 回だけ**実行してから引き直す。結果は「段のマスターの束」か「引けない」（2-4） |
-| domain/use_cases | `get_login_bonus_screen_use_case.gd` | 追加 | 同期。メモリの進捗・段のマスターの束・`login_bonus_list` から `LoginBonusScreen` を作る（1-3 の規則。名前・`mst_item.type` の引きは既存 `GetLoginBonusDisplaysUseCase` を使う）。`FROM_LOGIN` / `FROM_HOME` の違いは引数 `include_login_bonus_list` と `play_stamp_allowed` で受ける |
+| domain/use_cases | `get_login_bonus_screen_use_case.gd` | 追加 | 同期。メモリの進捗・段のマスターの束・`login_bonus_list` から `LoginBonusScreen` を作る（1-3 の規則。名前・`mst_item.type` の引きは既存 `GetLoginBonusDisplaysUseCase` を使う）。`FROM_LOGIN` / `FROM_HOME` の違いは引数 `include_login_bonus_list` と `play_stamp_allowed` で受ける。第 4 引数 `play_stamp_normal`（既定 真）は、再受け取りの成功後に画面を作り直すとき、login で再生済みの通常の段をもう一度鳴らさないために偽にする（T5: 再受け取りで真なのは VIP の段だけ） |
 | domain/use_cases | `get_login_bonus_displays_use_case.gd` | 変更 | `item_type` を載せる。`unit`・`equipment`・`stamina` 以外の行で `mst_item` を引く（`item_type` のため。`item_name` は今のまま `item` の行だけ） |
 | domain/use_cases | `login_use_case.gd` | 変更 | 成功時に `login_bonus_calendars` もメモリへ置く（`replace_calendars`）。再受け取りの応答は login ではないので扱わない |
 | data/api | `login_bonus_calendar_response.gd` | 追加 | **段 1 つ**の辞書（進捗だけ）→ `LoginBonusCalendar`（login 応答と list 応答で共用。4 節） |
@@ -205,7 +205,7 @@ LoginBonus (Control, login_bonus_presenter.gd)         … 入口 entry を @exp
 
 - 通常は起きない（タイトルから入るときにマスターのダウンロードが走る。`master_data_loaded`）。起きるのは、サーバーがマスターを更新した直後（応答の段の ID が新しい）・ダウンロードが失敗していた・同梱 DB しか無いときなど
 - **失敗の区別（古い配信ファイルの合図）**: 古い配信ファイルに `sort_desc` の列が無いと、並べ替えの SQL が「列なし」のエラーになる。`select_rows` は失敗を空配列にするので、**`try_select_rows` の `ok = false`（クエリ失敗・テーブルが開けない）を「古いマスター」の合図として扱い、再取得の対象に含める**。`ok = true` で本体が 0 件（その ID の行が無い）も同じく再取得の対象。Repository は結果の種別（見つかった／行が無い／読めない）を返し、UseCase は後 2 つを同じ再取得にする（種別はログ・テストで区別する）
-- **既定案**: 画面を出す前（`FROM_LOGIN` は `_ready`、`FROM_HOME` は list の応答の後）に `PrepareLoginBonusMasterUseCase` が、引けない段があれば **`CheckMasterDataUseCase.handle()` を 1 回**呼んで引き直す（同じ「読み込み中…」を出す。再取得は version の確認＋差分テーブルのダウンロード）。**IN_PROGRESS（ほかで同期中）・FAILED・再取得後も引けないときは、画面全体を今の文字の画面にフォールバックする**（1-3 の④。段ごとには落とさない）。ループはしない（1 回だけ）。`FROM_LOGIN` は通常通信しないが、このときだけ通信が入る（失敗してもタップでホームへ進める）
+- **既定案**: 画面を出す前（`FROM_LOGIN` は `_ready`、`FROM_HOME` は list の応答の後）に `PrepareLoginBonusMasterUseCase` が、引けない段があれば **`CheckMasterDataUseCase.handle()` を 1 回**呼んで引き直す（同じ「読み込み中…」を出す。再取得は version の確認＋差分テーブルのダウンロード）。**IN_PROGRESS（ほかで同期中）・FAILED・再取得後も引けないときは、引けない段だけ出さず、両方の段が出せないときだけ今の文字の画面にフォールバックする**（1-3 の④。人の回答 U-11。通常だけ引ければ通常だけ、VIP だけ引ければ VIP だけ表示）。ループはしない（1 回だけ）。`FROM_LOGIN` は通常通信しないが、このときだけ通信が入る（失敗してもタップでホームへ進める）
 - `X-Master-Update-Required` の裏の同期とは独立（同時実行は `CheckMasterDataUseCase` が防ぐ。IN_PROGRESS はフォールバック）
 
 ### 2-3. オートロードへの影響
@@ -427,10 +427,10 @@ S2 のマージ後の差分は直し済み（12 節）。V2 と V3 は別の PR�
 **V3**
 - `LoginBonusCalendarResponse`（サーバー api.md 2.4 の例の JSON のうち進捗の項目を固定の入力にする。`last_received_day` の名前の取り違えを防ぐ）: 正常な段・null・キー無し・Dictionary でない・`last_day` null・真偽値が null/0/1/文字列（偽に落ちる）・全日の報酬が応答に**無くても**読める
 - `LocalMstLoginBonusRepository`／`LocalMstVipLoginBonusRepository`（`LocalMstItemRepository` のテストの方式。偽の `MasterDatabase`）: 引ける・引けない（null）・テーブルが無い（null）・報酬行が `sort_desc` 降順で同値は `content_type`・`content_mst_id` 昇順・`day = 0` を捨てる・範囲外の日を捨てる・欠けた日を空の日で補う・`content_option` が壊れた JSON でも落ちない・`is_wallet` が 0/1 の整数で来ても真偽値に直る・数量が `content_quantity` × `amount`・VIP の読みが `deploy_key` の列に依存しない（`deploy_key` の無いテーブルの偽の DB で引ける）・`try_select_rows` が失敗（列なし・テーブルなし）で `ok = false`、0 件では `ok = true`・`sort_desc` の列が無い古い配信ファイルで「失敗」が返る（空配列と区別される）・古い配信ファイルの `mst_item`（`is_wallet` の列が無い）でも `get_by_id` が引ける（偽）
-- `PrepareLoginBonusMasterUseCase`（偽の `CheckMasterDataUseCase`）: 全部引ける → 再取得しない・引けない段がある → `handle()` を 1 回だけ呼んで引き直す・再取得後も引けない/FAILED/IN_PROGRESS → 文字の画面へのフォールバック・再取得を繰り返さない
+- `PrepareLoginBonusMasterUseCase`（偽の `CheckMasterDataUseCase`）: 全部引ける → 再取得しない・引けない段がある → `handle()` を 1 回だけ呼んで引き直す・再取得後も引けない/FAILED/IN_PROGRESS → その段は引けないまま返る（出す・出さないは画面の UseCase）・再取得を繰り返さない
 - `ReceiveVipLoginBonusResponse`: `trx_vip_login_bonus`・`login_bonus_list`・`vip_login_bonus_calendar`・`updated_resources` の取り出し・各キー欠落でも失敗にしない・`vip_login_bonus_calendar` が `is_granted_now` 真・`can_re_receive` 偽で VIP の段になる
 - `LoginResponse`: 新キー無しの旧応答で `login_bonus_calendars` が空、`login_bonus_list` は従来どおり。新キーがあっても既存の項目は変わらない
-- `GetLoginBonusScreenUseCase`（**中核。表の全行**）: 今日の段（`last_day` = 1・中間・`cycle_days`）・今日の段でない・`is_granted_today` が真で `last_day` が範囲外・`is_granted_now` が真/偽（`play_stamp` が今日のマスだけ）・通常だけ/VIP だけ/両方/どちらも無い・8 日超（文字の画面）・再表示の旨の条件（どの段も今日の段でない日は出さない。T3・U-3）・`FROM_HOME` は `login_bonus_list` の行を出さない・サイクルが 1 周した後（`last_day` = 1 で前サイクルのスタンプを引き継がない）・カムバックだけが配られた日・`content_type = wallet` の報酬が `mst_item.is_wallet` の行として名前・絵で出る・段の ID をマスターで引けないときの文字の画面
+- `GetLoginBonusScreenUseCase`（**中核。表の全行**）: 今日の段（`last_day` = 1・中間・`cycle_days`）・今日の段でない・`is_granted_today` が真で `last_day` が範囲外・`is_granted_now` が真/偽（`play_stamp` が今日のマスだけ）・通常だけ/VIP だけ/両方/どちらも無い・8 日超（文字の画面）・再表示の旨の条件（どの段も今日の段でない日は出さない。T3・U-3）・`FROM_HOME` は `login_bonus_list` の行を出さない・サイクルが 1 周した後（`last_day` = 1 で前サイクルのスタンプを引き継がない）・カムバックだけが配られた日・`content_type = wallet` の報酬が `mst_item.is_wallet` の行として名前・絵で出る・片方の段だけ引けるとき（引けた段だけ表示・VIP を引けなければボタンも出さない）・両方引けないときの文字の画面
 - `FetchLoginBonusCalendarsUseCase` / `ReceiveVipLoginBonusUseCase`（偽の Repository）: 成功でメモリが更新される・VIP の段だけ `is_granted_now` が真で通常は変わらない・`ApplyUpdatedResourcesUseCase` が呼ばれる・失敗で何も反映しない・`BUSINESS`（26001〜26003 の 299）の `can_reuse` が偽（キー作り直し）。BUSINESS の後の再送は新しいキー・通信断の再送は同じキー（presenter のテストで `_receive_key` の変化を見る）
 - `ApplyUpdatedResourcesUseCase`: `trx_item_list` の差し替え（`mst_item_id` で置換・無ければ追加・他の行は残す）・`trx_diamond` の置換・キー無し/null/型違いで何も壊さない・他のキーを無視・`trx_wallet_list` の差し替え（`mst_item_id` が `coin` の行）・ホームの `CoinAmount`（wallet）・`DiamondTotal`（item）に反映される
 - `LoginBonusCalendarApiRepository`: list は冪等キー無し（リクエストのヘッダーに `X-Unique-Request-Identifier` が無い）・receive は冪等キーつきで本文に `mst_vip_login_bonus_id`・`ApiResult` の失敗が `AppError` になる（`login_api_repository_test` の方式）
@@ -485,7 +485,7 @@ S2 のマージ後の差分は直し済み（12 節）。V2 と V3 は別の PR�
 | K | シナリオ ⑧（押す前に別の経路で受け取り済みにする） | Q-9 の手順（リセットなし）で `--e2e-open-login-bonus --e2e-receive=home --e2e-stale-receive --e2e-dwell=2`（`login` 入口で試すときは `--e2e-open-login-bonus` を外し `--e2e-receive=login`） | **押す画面は `FROM_HOME`**（先行受け取りは `--e2e-receive` と同じ画面で、押す直前）。ボタンを押す → サーバーが業務エラー → 状態を取り直してボタンが消え「状態を更新しました」。画面は壊れない。二重受け取りは起きない（ホームの所持数が 1 回分） |
 | L | シナリオ ③ | Q-9 の手順（リセットなし）で `--e2e-open-login-bonus --e2e-fail-bonus=network --e2e-dwell=2` | `FROM_HOME` の読み込みが失敗し、エラー文＋「再試行」。タップでホームへ戻れる |
 | M | **この機能を入れる前のサーバーの版**（新キー・新 API が無い。用意: サーバーのリポジトリで、この機能の最初の変更の親のコミットを別の作業ツリーに取り出して起動し、`NEXUS_API_BASE_URL` をそちらに向ける。コミットの特定と起動手順はサーバー設計にも README にも無いので S-10 のまま未解決） | `--e2e-dwell=2` | カレンダーを出さず、今の文字の画面（「ログインボーナス!」＋行、または「受け取り済み」）。落ちない。旧サーバーのときホームのボタンを押すと、list が 404/エラーになり、L と同じ表示（要確認の挙動。12 節 Q-7） |
-| N2 | 古いマスター（同梱 DB に段の ID が無い。ダウンロードを止める） | Q-9 の手順（リセットなし）で `--e2e-dwell=2`（マスターのダウンロードを失敗させる引数は実装で決める） | 画面を出す前に「読み込み中…」→ 再取得が失敗 → 今の文字の画面にフォールバックし、タップでホームへ進める。落ちない（2-4） |
+| N2 | 古いマスター（同梱 DB に段の ID が無い。ダウンロードを止める） | Q-9 の手順（リセットなし）で `--e2e-dwell=2`（マスターのダウンロードを失敗させる引数は実装で決める） | 画面を出す前に「読み込み中…」→ 再取得が失敗 → 今の文字の画面にフォールバックし、タップでホームへ進める。落ちない（2-4）。両方の段を引けない場合の動き（片方だけ引けるなら引けた段だけ表示する） |
 | N | アイコンの確認 | `godot --path . debug/icon_gallery.tscn --e2e-shot=<dir>`（形は実装で決める） | 全アイコンが 1 枚に並ぶ。マスターに在って絵が無い ID は赤。`unknown`・`category_*` も見える |
 
 - 未知の `content_type`・`unit`・`equipment` の絵（`unknown`）は、録画用シードで作りにくいので単体テストと、ギャラリー（N）の `unknown` で確かめる。報酬が `unit`・`equipment` のマスターを録画用シードで足せるなら、ケース A に足す（サーバーに依頼。db.md 6 節のシナリオには無い）

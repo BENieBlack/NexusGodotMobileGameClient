@@ -176,9 +176,9 @@ X-Client-Signature: HMAC-SHA256("{timestamp}:{nonce}:{request_body}")
 | `equipment` | 装備 |
 | `item` | アイテム。**無償ダイヤは `type = item`・`id = free_diamond`**（種別 `diamond` は廃止。`id` で見分ける）。表示名は `mst_item`（l10n）から引く（`GetLoginBonusDisplaysUseCase`）。引けなければ `free_diamond` は「無償ダイヤ」、他は「アイテム (ID:…)」 |
 
-## updated_resources と購入・消費の応答（今は読まない。将来の機能の前提）
+## updated_resources と購入・消費の応答（読むのはログインボーナスの再受け取りだけ。ほかは将来の機能の前提）
 
-クライアントは今、`updated_resources` も購入・消費の応答も読まない（呼ぶ API が無い）。読む機能（ガチャ・交換・購入・メール）を作るときの前提:
+クライアントが `updated_resources` を読むのは、ログインボーナスの再受け取り（`POST /login_bonus/receive`）だけ。`ApplyUpdatedResourcesUseCase`（player の公開 UseCase）が、ホームが読む 4 種（`trx_item_list`・`trx_wallet_list`・`trx_diamond`・`trx_stamina_list`）だけを取り込み、他のキーは無視する（`trx_item_list`・`trx_wallet_list` は `mst_item_id`、`trx_stamina_list` は `type` を主キーに差し替え）。購入・消費の応答は読まない（呼ぶ API が無い）。読む機能（ガチャ・交換・購入・メール）を作るときの前提:
 
 - `updated_resources` は「キーがあれば上書き、無ければ現状維持」。変更があった方だけ載る（無償だけ使えば `trx_item_list` だけ、有償だけなら `trx_diamond` だけ）
 - `trx_diamond` は単数のオブジェクト、`trx_item_list` は配列（型が違う）。`trx_item_list` は変更のあった行だけ載りうる（login の全量とは違う）ので、`mst_item_id` を主キーに差し替える（全置き換えにしない。方式は読む機能の設計で決める）

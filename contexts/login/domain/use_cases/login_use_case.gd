@@ -6,7 +6,7 @@
 ##   1. 冪等キーを決める（呼び出し元が渡す。空なら作る）。X-Unique-Request-Identifier に必ず付ける（D6）
 ##   2. LoginRepository.fetch_login で送る。失敗ならその AppError を返す（何も反映しない）
 ##   3. プレイヤーと所持データを、player の公開 UseCase（ApplyLoginDataUseCase）に渡す
-##   4. ログインボーナスを自コンテキストの Repository に置く
+##   4. ログインボーナスと、カレンダーの段の進捗（新キー。無ければ両方 null）を自コンテキストの Repository に置く
 ## 冪等キーの扱い（client_design.md 3-4）: キーの寿命は「ひとつの操作」で、持つのは呼び出し元（presenter）。
 ##   失敗して再送するとき、IdempotencyKey.can_reuse(error.kind) が真なら同じキーを渡し、
 ##   偽（BUSINESS。業務エラーも保存され、同じエラーが返り続ける）なら IdempotencyKey.generate() で作り直す。
@@ -50,4 +50,5 @@ func handle(idempotency_key: String = "") -> Result:
 		fetched.has_server_time
 	)
 	_login_bonus_repository.replace(fetched.login_bonuses)
+	_login_bonus_repository.replace_calendars(fetched.login_bonus_calendars)
 	return Result.success()
